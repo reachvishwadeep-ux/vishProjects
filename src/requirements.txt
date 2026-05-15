@@ -1,0 +1,9 @@
+langchain 
+langchain-community 
+langchain-google-genai
+langchain-openai
+langgraph
+python-dotenv
+pydantic
+duckduckgo-search
+beautifulsoup4
