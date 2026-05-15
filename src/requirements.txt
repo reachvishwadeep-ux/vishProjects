@@ -7,3 +7,4 @@ python-dotenv
 pydantic
 duckduckgo-search
 beautifulsoup4
+scikit-learn

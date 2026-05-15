@@ -23,4 +23,11 @@ response_format={
         }
     }
 
+prompt = """
+
+You are responding to customer about what product they have inb
+
+
+"""
+
 #print(json.dumps(response_format, indent=2))
