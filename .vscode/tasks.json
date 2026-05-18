@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start OTEL Collector (if needed)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$listening = Test-NetConnection localhost -Port 4318 -InformationLevel Quiet; if (-not $listening) { Start-Process -FilePath \"C:/Program Files/Sumo Logic/OpenTelemetry Collector/bin/otelcol-sumo.exe\" -ArgumentList \"--config\",\"${workspaceFolder}/otelcol-local.yaml\" -WindowStyle Hidden }; $ready = Test-NetConnection localhost -Port 4318 -InformationLevel Quiet; if ($ready) { Write-Host \"Collector ready on 4318\" } else { Write-Warning \"Collector is not listening on 4318 yet\" }"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run build_a_graph with OpenTelemetry",
+      "type": "shell",
+      "dependsOn": [
+        "Start OTEL Collector (if needed)"
+      ],
+      "dependsOrder": "sequence",
+      "command": "${workspaceFolder}/venv/Scripts/opentelemetry-instrument.exe",
+      "args": [
+        "${workspaceFolder}/venv/Scripts/python.exe",
+        "${workspaceFolder}/src/langgraph/build_a_graph.py"
+      ],
+      "options": {
+        "env": {
+          "OTEL_SERVICE_NAME": "vishProjects",
+          "OTEL_TRACES_EXPORTER": "otlp",
+          "OTEL_METRICS_EXPORTER": "otlp",
+          "OTEL_LOGS_EXPORTER": "otlp",
+          "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+          "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Maintain Traces File (truncate if > 100 MB)",
+      "type": "shell",
+      "command": "${workspaceFolder}/venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/maintain_traces.py"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

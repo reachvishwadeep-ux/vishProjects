@@ -12,3 +12,5 @@ deepagents
 tavily-python
 Ipython
 grandalf
+opentelemetry-distro
+opentelemetry-exporter-otlp

@@ -7,6 +7,9 @@ class AgentState(TypedDict):
     messages:Annotated[List[str],operator.add]
     revision_count:int
     is_valid:bool
+    total_cost:float #track spend
+    max_budget:float #max spend allowed
+
 
 #2. Define node1
 def research_node(state:AgentState) ->AgentState:
@@ -46,3 +49,19 @@ try:
     
 except ImportError:
     print(app.get_graph())
+
+#5. add financial guardrails
+def financial_guardrail(state:AgentState):
+    """
+    Act as circuit breaker to prevent overspending. 
+    If total cost exceeds max budget, end the workflow.
+
+    """
+    if state["total_cost"] >= state["max_budget"]:
+        return "hard_stop"
+    return "continue"
+
+#integrate this into the Graph
+workflow.add_conditional_edges("research", 
+                               financial_guardrail,
+                               {"hard_stop": END, "continue": "validate"})

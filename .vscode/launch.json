@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: build_a_graph with OpenTelemetry",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/langgraph/build_a_graph.py",
+      "console": "integratedTerminal",
+      "env": {
+        "OTEL_SERVICE_NAME": "vishProjects",
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "otlp",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+      }
+    }
+  ]
+}
