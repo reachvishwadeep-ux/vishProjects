@@ -14,5 +14,5 @@ except UnicodeDecodeError:
 
 print(f"Loaded {len(dataset)} lines from {file_path}")
 
-#create chunks, embed and store in vector database in memory
-#import ollama
+#2. create chunks, embed and store in vector database in memory
+import ollama
