@@ -21,9 +21,9 @@
         "Start OTEL Collector (if needed)"
       ],
       "dependsOrder": "sequence",
-      "command": "${workspaceFolder}/venv/Scripts/opentelemetry-instrument.exe",
+      "command": "${workspaceFolder}/.venv/Scripts/opentelemetry-instrument.exe",
       "args": [
-        "${workspaceFolder}/venv/Scripts/python.exe",
+        "${workspaceFolder}/.venv/Scripts/python.exe",
         "${workspaceFolder}/src/langgraph/build_a_graph.py"
       ],
       "options": {
@@ -41,7 +41,7 @@
     {
       "label": "Maintain Traces File (truncate if > 100 MB)",
       "type": "shell",
-      "command": "${workspaceFolder}/venv/Scripts/python.exe",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
       "args": [
         "${workspaceFolder}/maintain_traces.py"
       ],

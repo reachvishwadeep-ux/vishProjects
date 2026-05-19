@@ -6,6 +6,7 @@
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/src/langgraph/build_a_graph.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
       "console": "integratedTerminal",
       "env": {
         "OTEL_SERVICE_NAME": "vishProjects",

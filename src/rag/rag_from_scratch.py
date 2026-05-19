@@ -15,4 +15,12 @@ except UnicodeDecodeError:
 print(f"Loaded {len(dataset)} lines from {file_path}")
 
 #2. create chunks, embed and store in vector database in memory
+
 import ollama
+ollama.create_model(
+    name="cat-facts-embedding",
+    base_model="text-embedding-3-small",
+    description="Embedding model for cat facts dataset",
+    input_type="text",
+    output_type="embedding"
+)

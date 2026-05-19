@@ -1,4 +1,5 @@
 {
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "github.copilot.chat.otel.enabled": false,
   "github.copilot.chat.otel.exporterType": "otlp-http",
   "github.copilot.chat.otel.otlpEndpoint": "http://localhost:4318",
