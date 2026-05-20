@@ -1,8 +1,10 @@
-ollama
+ollama 
+openai
 langchain 
 langchain-community 
 langchain-google-genai
 langchain_openai
+langchain-text-splitters
 langgraph
 python-dotenv
 pydantic
@@ -15,3 +17,4 @@ Ipython
 grandalf
 opentelemetry-distro
 opentelemetry-exporter-otlp
+pymupdf
