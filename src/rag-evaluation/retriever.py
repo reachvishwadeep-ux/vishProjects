@@ -3,7 +3,11 @@ from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+import os
+
 load_dotenv()
+
+#os.environ.setdefault("USER_AGENT", "vishProjects-rag-eval/1.0")
 
 # List of URLs to load documents from
 urls = [

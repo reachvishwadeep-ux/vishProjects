@@ -34,7 +34,7 @@ grader_llm = ChatOpenAI(model="gpt-5.4", temperature=0).with_structured_output(
 def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
     """An evaluator for RAG answer accuracy"""
 
-    print(f"outputs **************************** : {outputs}")
+    #print(f"outputs **************************** : {outputs}")
 
     answers = f"""\
                 QUESTION: {inputs['question']}
