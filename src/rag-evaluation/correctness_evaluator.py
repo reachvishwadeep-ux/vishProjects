@@ -36,7 +36,7 @@ def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
 
     #print(f"outputs **************************** : {outputs}")
 
-    answers = f"""\
+    question_answers = f"""\
                 QUESTION: {inputs['question']}
                 GROUND TRUTH ANSWER: {reference_outputs['answer']}
                 STUDENT ANSWER: {outputs['answers:']}
@@ -45,7 +45,7 @@ def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
     # Run evaluator
     grade = grader_llm.invoke([
         {"role": "system", "content": correctness_instructions},
-        {"role": "user", "content": answers}
+        {"role": "user", "content": question_answers}
     ])
     return grade["correct"]
 
