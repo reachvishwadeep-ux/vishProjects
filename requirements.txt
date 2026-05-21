@@ -18,3 +18,4 @@ grandalf
 opentelemetry-distro
 opentelemetry-exporter-otlp
 pymupdf
+pandas
