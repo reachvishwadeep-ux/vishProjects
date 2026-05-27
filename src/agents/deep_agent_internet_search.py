@@ -12,7 +12,7 @@ tavily_client = TavilyClient()
 def internet_search(query:str,
                     max_results: int=1,
                     search_engine: Literal["DuckDuckGo"] = "DuckDuckGo",
-                    topic:Literal["news", "sports", "entertainment"] = "news",
+                    topic:Literal["news"] = "news",
                     include_raw_content:bool=False):
     """Search the web for recent information and return Tavily search results."""
     return tavily_client.search(query=query,

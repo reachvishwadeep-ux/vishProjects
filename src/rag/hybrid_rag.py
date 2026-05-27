@@ -35,13 +35,13 @@ vectorstore = Chroma.from_documents(
 vector_retriever = vectorstore.as_retriever(
     search_kwargs={
         "k": 3,
-        "filter": {"env": "prod"}   # metadata filtering
+        "filter": {"product": "oracle"}   # metadata filtering
     }
 )
 # 4. Hybrid retriever: combine keyword + vector
 hybrid_retriever = EnsembleRetriever(
     retrievers=[bm25_retriever, vector_retriever],
-    weights=[0.4, 0.6]
+    weights=[0.3, 0.7]
 )
 
 # 5. Search
