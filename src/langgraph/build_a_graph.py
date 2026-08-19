@@ -1,5 +1,7 @@
 from typing import TypedDict,Annotated,List
+from langgraph.graph import StateGraph, END
 import operator
+from IPython.display import Image
 
 #1. Define the agent state
 class AgentState(TypedDict):
@@ -38,8 +40,6 @@ workflow = None
 app = None
 
 def _build_graph():
-    from langgraph.graph import StateGraph, END
-
     workflow = StateGraph(AgentState)
     workflow.add_node("research", research_node)
     workflow.add_node("validate", validator_node)
@@ -53,13 +53,6 @@ def _build_graph():
     )
     app = workflow.compile()
 
-    from IPython.display import Image
-    try:
-        print(app.get_graph().draw_ascii())
-        Image(app.get_graph().draw_mermaid_png())
-    except ImportError:
-        print(app.get_graph())
-
     workflow.add_conditional_edges(
         "research",
         financial_guardrail,
@@ -71,6 +64,11 @@ def _build_graph():
 def _run_demo():
     global workflow, app
     workflow, app = _build_graph()
+    try:
+        print(app.get_graph().draw_ascii())
+        Image(app.get_graph().draw_mermaid_png())
+    except ImportError:
+        print(app.get_graph())
 
 
 if __name__ == "__main__":

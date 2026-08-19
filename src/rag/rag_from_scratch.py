@@ -1,24 +1,17 @@
 import os
+import ollama
 
+#1. create dataset
 dataset = []
 EMBEDDING_MODEL = 'hf.co/CompendiumLabs/bge-base-en-v1.5-gguf'
 LANGUAGE_MODEL = 'hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF'
 VECTOR_DB = []
-ollama = None
-
-def _get_ollama():
-  global ollama
-  if ollama is None:
-    import ollama as ollama_module
-    ollama = ollama_module
-  return ollama
 
 def add_chunks_to_vector_db(chunks):
-    embedding = _get_ollama().embed(
-        model=EMBEDDING_MODEL, input=chunks
-    )['embeddings'][0]
+    embedding = ollama.embed(model=EMBEDDING_MODEL,input=chunks)['embeddings'][0]
     VECTOR_DB.append((chunks,embedding))
 
+#3. define cosine similarity function to retrieve relevant chunks based on query embedding
 def cosine_similarity(a, b):
   dot_product = sum([x * y for x, y in zip(a, b)])
   norm_a = sum([x ** 2 for x in a]) ** 0.5
@@ -26,17 +19,19 @@ def cosine_similarity(a, b):
   return dot_product / (norm_a * norm_b)
 
 def retrieve(query, top_n=1):
-  query_embedding = _get_ollama().embed(
-      model=EMBEDDING_MODEL, input=query
-  )['embeddings'][0]
+  query_embedding = ollama.embed(model=EMBEDDING_MODEL, input=query)['embeddings'][0]
+  # temporary list to store (chunk, similarity) pairs
   similarities = []
   for chunk, embedding in VECTOR_DB:
     similarity = cosine_similarity(query_embedding, embedding)
     similarities.append((chunk, similarity))
+  # sort by similarity in descending order, because higher similarity means more relevant chunks
   similarities.sort(key=lambda x: x[1], reverse=True)
+  # finally, return the top N most relevant chunks
   return similarities[:top_n]
 
 def _run_demo():
+  #1. create dataset
   file_path = os.path.join(os.path.dirname(__file__), 'cat-facts.txt')
   try:
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -46,8 +41,15 @@ def _run_demo():
       dataset.extend(file.readlines())
 
   print(f"Loaded {len(dataset)} lines from {file_path}")
+
+  #2. create chunks, embed and store in vector database in memory
+  #consider each line in the dataset as a chunk for simplicity.
   for chunk in dataset:
     add_chunks_to_vector_db(chunk)
+
+    #print(f'Added chunk {i+1}/{len(dataset)} to the database')
+
+  #5. Test now
   print(retrieve("What do cats eat?"))
 
 

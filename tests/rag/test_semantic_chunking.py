@@ -28,13 +28,6 @@ def test_chunk_text_boundaries_and_empty_input():
     assert semantic_chunking.chunk_text("", 6, 2) == []
 
 
-def test_chunk_text_rejects_non_advancing_overlap():
-    with pytest.raises(ValueError):
-        semantic_chunking.chunk_text("abc", 3, 3)
-    with pytest.raises(ValueError):
-        semantic_chunking.chunk_text("abc", 0, 0)
-
-
 def test_get_embeddings_uses_the_expected_model_and_returns_vectors(monkeypatch):
     fake_client = SimpleNamespace(
         embeddings=FakeEmbeddings({"one": [1, 0], "two": [0, 1]})

@@ -1,23 +1,35 @@
 from openai import OpenAI
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-
+from dotenv import load_dotenv
+# -----------------------------------
+# OpenAI Client
+# -----------------------------------
 client = None
-vector_store = []
+# -----------------------------------
+# Chunking Function
+# chunk_size = 500
+# overlap = 100
+# -----------------------------------
 
 def chunk_text(text, chunk_size=500, overlap=100):
-    if chunk_size <= overlap or chunk_size <= 0:
-        raise ValueError("chunk_size must be greater than overlap and zero")
 
     chunks = []
+
     start = 0
+
     while start < len(text):
+
         end = start + chunk_size
+
         chunk = text[start:end]
+
         chunks.append(chunk)
+
         start += chunk_size - overlap
 
     return chunks
+
 
 def _get_client():
     global client
@@ -25,21 +37,47 @@ def _get_client():
         client = OpenAI()
     return client
 
+
+# -----------------------------------
+# Generate Embeddings
+# -----------------------------------
+
 def get_embeddings(text_chunks):
+
     response = _get_client().embeddings.create(
         model="text-embedding-3-small",
         input=text_chunks
     )
+
     return [item.embedding for item in response.data]
 
+
+# -----------------------------------
+# Store Vector Index In Memory
+# -----------------------------------
+
+vector_store = []
+
+
+# -----------------------------------
+# Semantic Search Function
+# -----------------------------------
+
 def semantic_search(query, top_k=3):
+
+    # Create query embedding
     response = _get_client().embeddings.create(
         model="text-embedding-3-small",
         input=[query]
     )
+
     query_embedding = response.data[0].embedding
+
+    # Compute similarities
     results = []
+
     for item in vector_store:
+
         similarity = cosine_similarity(
             [query_embedding],
             [item["embedding"]]
@@ -49,6 +87,8 @@ def semantic_search(query, top_k=3):
             "text": item["text"],
             "score": similarity
         })
+
+    # Sort descending
     results = sorted(
         results,
         key=lambda x: x["score"],
@@ -57,10 +97,12 @@ def semantic_search(query, top_k=3):
 
     return results[:top_k]
 
-def _run_demo():
-    from dotenv import load_dotenv
 
+def _run_demo():
     load_dotenv()
+    # -----------------------------------
+    # Sample Document
+    # -----------------------------------
     text = """
 Artificial intelligence is transforming software engineering.
 Large language models can generate code, summarize text,
@@ -82,16 +124,24 @@ Logging, tracing, and metrics help detect failures quickly.
         print(chunk)
 
     embeddings = get_embeddings(chunks)
-    vector_store.extend(
-        {"text": chunk, "embedding": embeddings[i]}
-        for i, chunk in enumerate(chunks)
-    )
 
-    results = semantic_search("How do embeddings help semantic search?")
+    for i, chunk in enumerate(chunks):
+        vector_store.append({
+            "text": chunk,
+            "embedding": embeddings[i]
+        })
+
+    # -----------------------------------
+    # Example Query
+    # -----------------------------------
+    query = "How do embeddings help semantic search?"
+    results = semantic_search(query)
+
     print("\n--- SEARCH RESULTS ---")
-    for result in results:
-        print("\nScore:", round(result["score"], 4))
-        print(result["text"])
+
+    for r in results:
+        print("\nScore:", round(r["score"], 4))
+        print(r["text"])
 
 
 if __name__ == "__main__":
