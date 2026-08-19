@@ -2,7 +2,6 @@
 
 # pip install pymupdf langchain-text-splitters openai
 
-import fitz  # PyMuPDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 PDF_PATH = "my_document.pdf"
@@ -12,6 +11,14 @@ splitter = RecursiveCharacterTextSplitter(
     chunk_overlap=100,
     separators=["\n\n", "\n", ". ", " ", ""]
 )
+fitz = None
+
+def _get_fitz():
+    global fitz
+    if fitz is None:
+        import fitz as fitz_module
+        fitz = fitz_module
+    return fitz
 
 def caption_image(image_bytes: bytes) -> str:
     """
@@ -21,7 +28,7 @@ def caption_image(image_bytes: bytes) -> str:
     return "Image description placeholder: diagram, screenshot, or chart from the document."
 
 def extract_pdf_for_embeddings(pdf_path: str):
-    doc = fitz.open(pdf_path)
+    doc = _get_fitz().open(pdf_path)
     records = []
 
     for page_number, page in enumerate(doc, start=1):
@@ -64,21 +71,33 @@ def extract_pdf_for_embeddings(pdf_path: str):
 
     return records
 
-records = extract_pdf_for_embeddings(PDF_PATH)
-
-for r in records[:3]:
-    print(r)
-
 from openai import OpenAI
 
-client = OpenAI()
+client = None
+
+def _get_client():
+    global client
+    if client is None:
+        client = OpenAI()
+    return client
 
 def create_embedding(text: str):
-    response = client.embeddings.create(
+    response = _get_client().embeddings.create(
         model="text-embedding-3-small",
         input=text
     )
     return response.data[0].embedding
 
-for record in records:
-    record["embedding"] = create_embedding(record["content"])
+records = []
+
+def _run_demo():
+    global records
+    records = extract_pdf_for_embeddings(PDF_PATH)
+    for record in records[:3]:
+        print(record)
+    for record in records:
+        record["embedding"] = create_embedding(record["content"])
+
+
+if __name__ == "__main__":
+    _run_demo()

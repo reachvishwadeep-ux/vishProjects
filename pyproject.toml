@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["."]
+omit = [".venv/*", "tests/*"]
+
+[tool.coverage.report]
+show_missing = true

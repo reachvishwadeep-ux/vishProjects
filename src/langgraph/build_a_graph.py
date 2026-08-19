@@ -1,5 +1,4 @@
 from typing import TypedDict,Annotated,List
-from langgraph.graph import StateGraph, END
 import operator
 
 #1. Define the agent state
@@ -25,32 +24,6 @@ def validator_node(state:AgentState)->AgentState:
     return {"messages":state["messages"] + ["Validation result"],"revision_count":state["revision_count"],
             "is_valid":is_valid}
 
-#4. Build the graph
-workflow = StateGraph(AgentState)
-workflow.add_node("research", research_node)
-workflow.add_node("validate", validator_node)
-
-workflow.set_entry_point("research")
-workflow.add_edge("research", "validate")
-
-# The Cycle: if not valid and under 3 trials, go back, go back to research
-workflow.add_conditional_edges(
-    "validate", 
-    lambda state: "research" if not state["is_valid"] and state["revision_count"] < 3 else END     
-
-)
-
-app = workflow.compile()
-
-from IPython.display import Image
-try:
-    print(app.get_graph().draw_ascii())
-    Image(app.get_graph().draw_mermaid_png())
-    
-except ImportError:
-    print(app.get_graph())
-
-#5. add financial guardrails
 def financial_guardrail(state:AgentState):
     """
     Act as circuit breaker to prevent overspending. 
@@ -61,7 +34,44 @@ def financial_guardrail(state:AgentState):
         return "hard_stop"
     return "continue"
 
-#integrate this into the Graph
-workflow.add_conditional_edges("research", 
-                               financial_guardrail,
-                               {"hard_stop": END, "continue": "validate"})
+workflow = None
+app = None
+
+def _build_graph():
+    from langgraph.graph import StateGraph, END
+
+    workflow = StateGraph(AgentState)
+    workflow.add_node("research", research_node)
+    workflow.add_node("validate", validator_node)
+    workflow.set_entry_point("research")
+    workflow.add_edge("research", "validate")
+    workflow.add_conditional_edges(
+        "validate",
+        lambda state: "research"
+        if not state["is_valid"] and state["revision_count"] < 3
+        else END
+    )
+    app = workflow.compile()
+
+    from IPython.display import Image
+    try:
+        print(app.get_graph().draw_ascii())
+        Image(app.get_graph().draw_mermaid_png())
+    except ImportError:
+        print(app.get_graph())
+
+    workflow.add_conditional_edges(
+        "research",
+        financial_guardrail,
+        {"hard_stop": END, "continue": "validate"}
+    )
+    return workflow, app
+
+
+def _run_demo():
+    global workflow, app
+    workflow, app = _build_graph()
+
+
+if __name__ == "__main__":
+    _run_demo()
