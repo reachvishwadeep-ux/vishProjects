@@ -3,6 +3,7 @@
 # pip install pymupdf langchain-text-splitters openai
 
 import fitz  # PyMuPDF
+from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 PDF_PATH = "my_document.pdf"
@@ -21,46 +22,55 @@ def caption_image(image_bytes: bytes) -> str:
     return "Image description placeholder: diagram, screenshot, or chart from the document."
 
 def extract_pdf_for_embeddings(pdf_path: str):
-    doc = fitz.open(pdf_path)
+    if not Path(pdf_path).is_file():
+        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+
     records = []
 
-    for page_number, page in enumerate(doc, start=1):
-        # 1. Extract text in reading order
-        page_text = page.get_text("text", sort=True)
+    with fitz.open(pdf_path) as doc:
+        for page_number, page in enumerate(doc, start=1):
+            # 1. Extract text in reading order
+            page_text = page.get_text("text", sort=True)
 
-        # 2. Split text into semantic-ish chunks
-        text_chunks = splitter.split_text(page_text)
+            # 2. Split text into semantic-ish chunks
+            text_chunks = splitter.split_text(page_text)
 
-        for i, chunk in enumerate(text_chunks):
-            records.append({
-                "content": chunk,
-                "metadata": {
-                    "source": pdf_path,
-                    "page": page_number,
-                    "chunk_type": "text",
-                    "chunk_index": i
-                }
-            })
+            for i, chunk in enumerate(text_chunks):
+                records.append({
+                    "content": chunk,
+                    "metadata": {
+                        "source": pdf_path,
+                        "page": page_number,
+                        "chunk_type": "text",
+                        "chunk_index": i
+                    }
+                })
 
-        # 3. Extract images from page
-        image_list = page.get_images(full=True)
+            # 3. Extract images from page
+            image_list = page.get_images(full=True)
 
-        for img_index, img in enumerate(image_list):
-            xref = img[0]
-            image_data = doc.extract_image(xref)
-            image_bytes = image_data["image"]
+            for img_index, img in enumerate(image_list):
+                xref = img[0]
+                try:
+                    image_data = doc.extract_image(xref)
+                    image_bytes = image_data["image"]
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to extract image on page {page_number} "
+                        f"(image index {img_index}, xref {xref})"
+                    ) from e
 
-            caption = caption_image(image_bytes)
+                caption = caption_image(image_bytes)
 
-            records.append({
-                "content": caption,
-                "metadata": {
-                    "source": pdf_path,
-                    "page": page_number,
-                    "chunk_type": "image_caption",
-                    "image_index": img_index
-                }
-            })
+                records.append({
+                    "content": caption,
+                    "metadata": {
+                        "source": pdf_path,
+                        "page": page_number,
+                        "chunk_type": "image_caption",
+                        "image_index": img_index
+                    }
+                })
 
     return records
 

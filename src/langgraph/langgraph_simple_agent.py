@@ -48,11 +48,22 @@ def tool_node(state:dict):
     """If the LLM decided to call a tool, this node executes the tool and adds the result to the messages."""
     result = []
     for tool_call in state["messages"][-1].tool_calls:
-        tool = tools_by_name[tool_call["name"]]
-        observation = tool.invoke(tool_call["args"])
-        result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
+        tool_name = tool_call.get("name")
+        tool_call_id = tool_call.get("id")
+        try:
+            tool = tools_by_name[tool_name]
+        except KeyError as e:
+            raise ValueError(
+                f"Unknown tool '{tool_name}' for tool call '{tool_call_id}'"
+            ) from e
+        try:
+            observation = tool.invoke(tool_call["args"])
+        except Exception as e:
+            raise RuntimeError(
+                f"Tool '{tool_name}' failed for tool call '{tool_call_id}'"
+            ) from e
+        result.append(ToolMessage(content=observation, tool_call_id=tool_call_id))
     
     return {"messages": result}
-
 
 

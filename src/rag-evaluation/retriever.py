@@ -3,7 +3,6 @@ from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -17,8 +16,15 @@ urls = [
 ]
 
 #load documents from the urls
-docs = [WebBaseLoader(url).load() for url in urls]
-docs_list = [item for sublist in docs for item in sublist]
+docs_list = []
+for url in urls:
+    try:
+        loaded_docs = WebBaseLoader(url).load()
+    except Exception as e:
+        raise RuntimeError(f"Failed to load documents from {url}") from e
+    if not loaded_docs:
+        raise ValueError(f"No documents loaded from {url}")
+    docs_list.extend(loaded_docs)
 
 # Initialize a text splitter with specified chunk size and overlap. 
 # use RecursiveCharacterTextSplitter
@@ -40,4 +46,3 @@ vectorstore = InMemoryVectorStore.from_documents(documents=doc_splits,
 #create retriever from vectorstore
 retriever = vectorstore.as_retriever(k=6)
 #print(retriever.invoke("What are the different types of agents?"))
-

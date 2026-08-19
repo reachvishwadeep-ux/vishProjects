@@ -21,8 +21,26 @@ EMBEDDING_MODEL = 'hf.co/CompendiumLabs/bge-base-en-v1.5-gguf'
 LANGUAGE_MODEL = 'hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF'
 
 VECTOR_DB=[]
+def get_embedding(input_text):
+  response = ollama.embed(model=EMBEDDING_MODEL, input=input_text)
+  try:
+    embeddings = response["embeddings"]
+  except (KeyError, TypeError) as e:
+    raise ValueError(
+      f"Embedding response for model {EMBEDDING_MODEL!r} and input "
+      f"{input_text!r} is missing 'embeddings'"
+    ) from e
+
+  if (not isinstance(embeddings, list) or not embeddings or
+      not isinstance(embeddings[0], list) or not embeddings[0]):
+    raise ValueError(
+      f"Embedding response for model {EMBEDDING_MODEL!r} and input "
+      f"{input_text!r} does not contain a non-empty embedding vector"
+    )
+  return embeddings[0]
+
 def add_chunks_to_vector_db(chunks):
-    embedding = ollama.embed(model=EMBEDDING_MODEL,input=chunks)['embeddings'][0]
+    embedding = get_embedding(chunks)
     VECTOR_DB.append((chunks,embedding))
 
 #consider each line in the dataset as a chunk for simplicity.
@@ -35,12 +53,14 @@ def cosine_similarity(a, b):
   dot_product = sum([x * y for x, y in zip(a, b)])
   norm_a = sum([x ** 2 for x in a]) ** 0.5
   norm_b = sum([x ** 2 for x in b]) ** 0.5
+  if norm_a == 0 or norm_b == 0:
+    raise ValueError("Cannot calculate cosine similarity for a zero vector")
   return dot_product / (norm_a * norm_b)
 
 #4. retrieve relevant chunks based on query
 
 def retrieve(query, top_n=1):
-  query_embedding = ollama.embed(model=EMBEDDING_MODEL, input=query)['embeddings'][0]
+  query_embedding = get_embedding(query)
   # temporary list to store (chunk, similarity) pairs
   similarities = []
   for chunk, embedding in VECTOR_DB:
