@@ -1,36 +1,15 @@
+import sys
+from pathlib import Path
 
-import json
-import openai
-from dotenv import load_dotenv
-import os
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-load_dotenv()
+from common.json_utils import parse_json_response
+from common.openai_utils import chat_completion
+from common.prompts import COUNTRY_JSON_PROMPT
 
+prompt = COUNTRY_JSON_PROMPT.format(country_name="Falkland Islands")
 
-prompt = """ Return the response in JSON format only.
-    Example:
-    {{
-        "Country": "USA",
-        "Capital": "Washington, D.C."
-        "President": "Donald Trump"
-    }}
+data = parse_json_response(chat_completion(prompt))
 
-    Now tell me about this country: {country_name}
-    """
-
-
-prompt = prompt.format(country_name="Falkland Islands")
-
-client = openai.OpenAI()
-response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[{"role":"user", "content":prompt}]
-)
-
-json_response = response.choices[0].message.content
-
-try:
-    data = json.loads(json_response)
+if data is not None:
     print(data["President"])
-except json.JSONDecodeError as e:
-    print("Error decoding JSON:", e)

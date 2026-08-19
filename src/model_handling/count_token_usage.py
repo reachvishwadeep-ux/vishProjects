@@ -1,18 +1,17 @@
-from dotenv import load_dotenv
-from langchain.chat_models import init_chat_model
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from langchain_core.callbacks import UsageMetadataCallbackHandler
 
-load_dotenv()
+from common.langchain_utils import get_web_search_model
+from common.prompts import HOROSCOPE_WEB_SEARCH_PROMPT
 
-model = init_chat_model("gpt-5.4-mini")
-tool = {"type": "web_search"}
-model_with_tools = model.bind_tools([tool])
-
-prompt = "What was Aquarious career Horoscope for tomorrow based on moon sign? give structured ouput" \
-"as Date, Horoscope, and Source." \
-"show output in indented form for better readability."
+model_with_tools = get_web_search_model()
 
 callback = UsageMetadataCallbackHandler()
 
-response = model_with_tools.invoke(prompt, config={"callbacks": [callback]})
+model_with_tools.invoke(HOROSCOPE_WEB_SEARCH_PROMPT,
+                        config={"callbacks": [callback]})
 print(callback.usage_metadata)

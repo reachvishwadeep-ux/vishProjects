@@ -1,7 +1,13 @@
-from deepagents import create_deep_agent
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
 
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from deepagents import create_deep_agent
+
+from common.env import load_env
+
+load_env()
 
 def getWeather(city:str) ->str:
     """Get Weather for a given city"""
@@ -17,5 +23,3 @@ response =agent.invoke(
 )
 
 print(response)
-
-

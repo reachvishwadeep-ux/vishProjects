@@ -1,10 +1,15 @@
-import os
+import sys
+from pathlib import Path
 from typing import Literal
-from tavily import TavilyClient
-from deepagents import create_deep_agent
-from dotenv import load_dotenv
 
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from deepagents import create_deep_agent
+from tavily import TavilyClient
+
+from common.env import load_env
+
+load_env()
 
 tavily_client = TavilyClient()
 

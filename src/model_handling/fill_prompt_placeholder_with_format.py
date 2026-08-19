@@ -1,12 +1,8 @@
-prompt = """ Return the response in JSON format only.
-    Example:
-    {{
-        "Country": "USA",
-        "Capital": "Washington, D.C."
-        "President": "Donald Trump"
-    }}
+import sys
+from pathlib import Path
 
-    Now tell me about this country: {country_name}
-    """
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-print(prompt.format(country_name="India"))
+from common.prompts import COUNTRY_JSON_PROMPT
+
+print(COUNTRY_JSON_PROMPT.format(country_name="India"))
