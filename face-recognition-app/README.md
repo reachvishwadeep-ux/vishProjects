@@ -61,19 +61,51 @@ docker compose exec api python -m scripts.ingest /data/repository
 
 ## Thresholds — calibrate before you trust them
 
-`MATCH_THRESHOLD` / `REVIEW_THRESHOLD` default to 0.42 / 0.32 cosine similarity.
-Those are starting points, not answers: the right value depends on your images and
-grows stricter as the gallery grows. Derive yours from labelled data:
+`MATCH_THRESHOLD` / `REVIEW_THRESHOLD` default to 0.32 / 0.22 cosine similarity,
+calibrated on LFW (100 people, 660 images) — see [Calibration](#calibration-lfw-baseline).
+That is a baseline, not an answer: the right value depends on your cameras and grows
+stricter as the gallery grows. Derive yours from labelled data:
 
 ```bash
-docker compose exec api python -m scripts.evaluate /data/repository --far 1e-3
+docker compose exec api python -m scripts.evaluate /data/repository --fpir 0.01
 ```
 
-It reports TAR@FAR, EER, Rank-1 and suggested thresholds. Report **TAR@FAR** and
-**Rank-1**, never bare "accuracy" — accuracy is meaningless on unbalanced pair sets.
+Report **TPIR@FPIR** and **Rank-1**, never bare "accuracy" — accuracy is meaningless on
+unbalanced pair sets.
 
 Scores between the two thresholds return `decision="review"` so borderline hits go to
 a human instead of being asserted as matches.
+
+### Why the threshold comes from FPIR, not FAR
+
+TAR@FAR is a *verification* metric: one comparison, one decision. `/v1/search` is
+*identification*: it compares the probe against every enrolled face and keeps the best,
+so a stranger gets as many chances to cross the threshold as the gallery has faces. At
+FAR = 1e-3 and 1000 stored faces you would false-accept on roughly every second search.
+
+So `scripts.evaluate` sets the suggested thresholds from the open-set numbers: it takes
+the *top* score each probe gets against the wrong people and puts the threshold at the
+`--fpir` quantile of that distribution.
+
+### Calibration: LFW baseline
+
+100 identities, 660 images, `buffalo_l`, leave-one-out:
+
+| metric | value |
+|---|---|
+| genuine pair score | mean 0.659, min −0.124 |
+| impostor pair score | mean 0.004, max 0.328 |
+| TAR @ FAR=1e-3 | 0.992 |
+| EER | 0.008 (at 0.156) |
+| Rank-1 | 0.997 |
+| TPIR @ FPIR=1% | 0.995 |
+| worst impostor top score | 0.328 |
+
+Note the gap between the two threshold recommendations: the pairwise FAR=1e-3 threshold
+is 0.21, but the worst stranger scored 0.328 — anything below that lets a false match
+through. The open-set threshold of **0.316** is the honest number, hence the 0.32 / 0.22
+defaults. LFW is web-scraped celebrity photos; expect your own thresholds to be lower
+(harder images) and to need re-checking as the gallery grows.
 
 ## Design notes
 
