@@ -1,0 +1,44 @@
+name: face-recognition-app
+
+on:
+  push:
+    paths:
+      - "face-recognition-app/**"
+      - ".github/workflows/face-recognition-app.yml"
+  pull_request:
+    paths:
+      - "face-recognition-app/**"
+      - ".github/workflows/face-recognition-app.yml"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: face-recognition-app/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check app scripts tests
+      - run: ruff format --check app scripts tests
+      - run: pytest -q
+        env:
+          PYTHONPATH: .
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: face-recognition-app/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.27.1"
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
