@@ -7,10 +7,15 @@ instead of "accuracy":
   * TAR@FAR       - true accept rate at a fixed false accept rate (verification)
   * EER           - equal error rate, and the threshold where it occurs
   * Rank-1        - closed-set identification accuracy (leave-one-out)
+  * TPIR@FPIR     - open-set identification rates, which is what /v1/search does
   * suggested MATCH_THRESHOLD / REVIEW_THRESHOLD for your data
 
+The suggested thresholds come from the open-set numbers, not from TAR@FAR: a
+search compares the probe against the whole gallery, so a per-pair FAR of 1e-3
+against 1000 stored faces means a false accept on roughly every second search.
+
 Usage:
-    python -m scripts.evaluate /path/to/repository --far 1e-3 --out report.json
+    python -m scripts.evaluate /path/to/repository --fpir 0.01 --out report.json
 """
 
 from __future__ import annotations
@@ -111,7 +116,58 @@ def rank1(embeddings: dict[str, np.ndarray]) -> float:
     return float(np.mean([p == t for p, t in zip(predicted, names, strict=True)]))
 
 
-def evaluate(root: Path, far: float, limit_per_person: int | None) -> dict[str, object]:
+def open_set_scores(
+    embeddings: dict[str, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-probe top gallery scores, leave-one-out.
+
+    This mirrors what /v1/search returns: one score per probe, the best over the
+    gallery. Returns ``(genuine_top, rival_top, impostor_top)`` where the first
+    two are aligned per probe (probes whose person has another image enrolled)
+    and ``impostor_top`` covers every probe -- it is the score a stranger would
+    get, so the threshold has to sit above it.
+    """
+    names, gallery = [], []
+    for name, vectors in embeddings.items():
+        for vector in vectors:
+            names.append(name)
+            gallery.append(vector)
+
+    labels = np.asarray(names)
+    scores = np.vstack(gallery) @ np.vstack(gallery).T
+    np.fill_diagonal(scores, -np.inf)  # never match a probe against itself
+
+    genuine_top, rival_top, impostor_top = [], [], []
+    for i, name in enumerate(names):
+        other_person = labels != name
+        same = (labels == name) & (np.arange(len(names)) != i)
+        best_impostor = float(scores[i][other_person].max())
+        impostor_top.append(best_impostor)
+        if same.any():
+            genuine_top.append(float(scores[i][same].max()))
+            rival_top.append(best_impostor)
+
+    return np.asarray(genuine_top), np.asarray(rival_top), np.asarray(impostor_top)
+
+
+def identification_rates(
+    embeddings: dict[str, np.ndarray], fpir: float
+) -> tuple[float, float, float]:
+    """Threshold hitting the target false-positive identification rate, plus TPIR.
+
+    TPIR counts a probe as correct only when the top match is the right person
+    *and* clears the threshold, which is the decision the API actually makes.
+    """
+    genuine_top, rival_top, impostor_top = open_set_scores(embeddings)
+    threshold = float(np.quantile(impostor_top, 1.0 - fpir))
+    correct = (genuine_top >= threshold) & (genuine_top >= rival_top)
+    tpir = float(correct.mean()) if genuine_top.size else float("nan")
+    return threshold, tpir, float(impostor_top.max())
+
+
+def evaluate(
+    root: Path, far: float, fpir: float, limit_per_person: int | None
+) -> dict[str, object]:
     embeddings = embed_directory(root, limit_per_person)
     if len(embeddings) < 2:
         raise SystemExit("need at least 2 people with detectable faces")
@@ -122,6 +178,7 @@ def evaluate(root: Path, far: float, limit_per_person: int | None) -> dict[str, 
 
     threshold, tar = tar_at_far(genuine, impostor, far)
     eer_threshold, eer = equal_error_rate(genuine, impostor)
+    match_threshold, tpir, worst_impostor = identification_rates(embeddings, fpir)
 
     return {
         "people": len(embeddings),
@@ -134,21 +191,29 @@ def evaluate(root: Path, far: float, limit_per_person: int | None) -> dict[str, 
         "eer": eer,
         "eer_threshold": eer_threshold,
         "rank1": rank1(embeddings),
-        "suggested_match_threshold": round(threshold, 4),
-        "suggested_review_threshold": round(min(threshold, eer_threshold) - 0.05, 4),
+        f"tpir_at_fpir_{fpir:g}": tpir,
+        "worst_impostor_top_score": worst_impostor,
+        "suggested_match_threshold": round(match_threshold, 4),
+        "suggested_review_threshold": round(max(match_threshold - 0.1, 0.0), 4),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
-    parser.add_argument("--far", type=float, default=1e-3)
+    parser.add_argument("--far", type=float, default=1e-3, help="verification FAR for TAR@FAR")
+    parser.add_argument(
+        "--fpir",
+        type=float,
+        default=0.01,
+        help="target false-positive identification rate; sets the suggested thresholds",
+    )
     parser.add_argument("--limit-per-person", type=int, default=None)
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    report = evaluate(args.root, args.far, args.limit_per_person)
+    report = evaluate(args.root, args.far, args.fpir, args.limit_per_person)
     text = json.dumps(report, indent=2)
     print(text)
     if args.out:

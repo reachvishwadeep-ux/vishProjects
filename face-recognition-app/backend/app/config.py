@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     insightface_root: str = "/models"
     det_size: int = 640
 
-    # Matching thresholds on cosine similarity of L2-normalised ArcFace embeddings.
-    # Calibrate on your own data with scripts/evaluate.py before trusting these.
-    match_threshold: float = 0.42
-    review_threshold: float = 0.32
+    # Matching thresholds on cosine similarity of L2-normalised ArcFace embeddings,
+    # calibrated on LFW at FPIR=1%. Recalibrate with scripts/evaluate.py on your own data.
+    match_threshold: float = 0.32
+    review_threshold: float = 0.22
 
     # Enrolment quality gates.
     min_face_pixels: int = 112
