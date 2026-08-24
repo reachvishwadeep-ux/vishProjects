@@ -90,7 +90,8 @@ class GalleryRepository {
     }
 
     final root = _configuredRoot ??
-        Directory('${(await getApplicationDocumentsDirectory()).path}/image_match_gallery');
+        Directory(
+            '${(await getApplicationDocumentsDirectory()).path}/image_match_gallery');
     if (!await root.exists()) {
       await root.create(recursive: true);
     }
@@ -102,7 +103,8 @@ class GalleryRepository {
     final root = await _resolveRoot();
     final index = File('${root.path}/index.json');
     await index.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(images.map((image) => image.toJson()).toList()),
+      const JsonEncoder.withIndent('  ')
+          .convert(images.map((image) => image.toJson()).toList()),
       flush: true,
     );
   }

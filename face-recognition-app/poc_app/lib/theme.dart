@@ -13,11 +13,14 @@ ThemeData buildTheme(Brightness brightness) {
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor:
-        brightness == Brightness.light ? const Color(0xFFF7F7FC) : const Color(0xFF111119),
+    scaffoldBackgroundColor: brightness == Brightness.light
+        ? const Color(0xFFF7F7FC)
+        : const Color(0xFF111119),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: brightness == Brightness.light ? Colors.white : const Color(0xFF1C1B26),
+      color: brightness == Brightness.light
+          ? Colors.white
+          : const Color(0xFF1C1B26),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
     navigationBarTheme: NavigationBarThemeData(
@@ -63,7 +66,8 @@ String decisionTitle(Decision decision) {
 String decisionMessage(Decision decision) {
   return switch (decision) {
     Decision.match => 'This photo closely matches an image in your repository.',
-    Decision.review => 'A similar image was found. Review the comparison before deciding.',
+    Decision.review =>
+      'A similar image was found. Review the comparison before deciding.',
     Decision.noMatch => 'No stored image passed the similarity threshold.',
   };
 }

@@ -14,7 +14,8 @@ img.Image _gradient({int size = 256, int shift = 0}) {
       image.setPixel(
         x,
         y,
-        img.ColorRgb8((x + shift) % 256, (y + shift) % 256, ((x + y) ~/ 2) % 256),
+        img.ColorRgb8(
+            (x + shift) % 256, (y + shift) % 256, ((x + y) ~/ 2) % 256),
       );
     }
   }

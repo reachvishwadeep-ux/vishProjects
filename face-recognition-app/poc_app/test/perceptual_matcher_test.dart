@@ -44,7 +44,8 @@ void main() {
   });
 
   test('an empty gallery gives no match and no candidates', () async {
-    final outcome = await matcher.match(probe: _jpeg(_shapes(0)), gallery: const []);
+    final outcome =
+        await matcher.match(probe: _jpeg(_shapes(0)), gallery: const []);
 
     expect(outcome.decision, Decision.noMatch);
     expect(outcome.candidates, isEmpty);
@@ -54,12 +55,14 @@ void main() {
 
   test('undecodable uploads are rejected', () {
     expect(
-      () => matcher.match(probe: Uint8List.fromList([9, 9, 9]), gallery: const []),
+      () => matcher
+          .match(probe: Uint8List.fromList([9, 9, 9]), gallery: const []),
       throwsA(isA<FormatException>()),
     );
   });
 
-  test('a recompressed copy of a stored image is matched and ranked first', () async {
+  test('a recompressed copy of a stored image is matched and ranked first',
+      () async {
     final gallery = [
       _stored('one', _jpeg(_shapes(1))),
       _stored('two', _jpeg(_shapes(2))),
@@ -76,18 +79,25 @@ void main() {
   });
 
   test('candidates come back sorted by descending score', () async {
-    final gallery = [for (var i = 0; i < 4; i++) _stored('$i', _jpeg(_shapes(i)))];
+    final gallery = [
+      for (var i = 0; i < 4; i++) _stored('$i', _jpeg(_shapes(i)))
+    ];
 
-    final outcome = await matcher.match(probe: _jpeg(_shapes(0)), gallery: gallery);
+    final outcome =
+        await matcher.match(probe: _jpeg(_shapes(0)), gallery: gallery);
     final scores = outcome.candidates.map((c) => c.score).toList();
 
-    expect(scores, orderedEquals(List.of(scores)..sort((a, b) => b.compareTo(a))));
+    expect(
+        scores, orderedEquals(List.of(scores)..sort((a, b) => b.compareTo(a))));
   });
 
   test('topK caps the number of candidates returned', () async {
-    final gallery = [for (var i = 0; i < 5; i++) _stored('$i', _jpeg(_shapes(i)))];
+    final gallery = [
+      for (var i = 0; i < 5; i++) _stored('$i', _jpeg(_shapes(i)))
+    ];
 
-    final outcome = await matcher.match(probe: _jpeg(_shapes(0)), gallery: gallery, topK: 2);
+    final outcome = await matcher.match(
+        probe: _jpeg(_shapes(0)), gallery: gallery, topK: 2);
 
     expect(outcome.candidates.length, 2);
     expect(outcome.comparisons, 5);

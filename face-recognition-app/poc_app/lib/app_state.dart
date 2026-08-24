@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -59,7 +58,8 @@ class AppState extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     for (final sample in buildDemoSet()) {
-      final image = await repository.add(bytes: sample.bytes, label: sample.label);
+      final image =
+          await repository.add(bytes: sample.bytes, label: sample.label);
       if (image != null) {
         _gallery.insert(0, image);
       }

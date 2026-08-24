@@ -35,7 +35,9 @@ void main() {
   test('non-image bytes are not added', () async {
     final repository = GalleryRepository(root: root);
 
-    expect(await repository.add(bytes: Uint8List.fromList([0, 1]), label: 'bad'), isNull);
+    expect(
+        await repository.add(bytes: Uint8List.fromList([0, 1]), label: 'bad'),
+        isNull);
     expect(await repository.load(), isEmpty);
   });
 

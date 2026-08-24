@@ -90,7 +90,8 @@ Uint8List _encode({
   required int variant,
 }) {
   final image = img.Image(width: 720, height: 720);
-  img.fill(image, color: img.ColorRgb8(background[0], background[1], background[2]));
+  img.fill(image,
+      color: img.ColorRgb8(background[0], background[1], background[2]));
 
   final offset = variant * 28;
   img.fillRect(

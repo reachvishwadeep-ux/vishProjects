@@ -32,7 +32,8 @@ void main() {
   });
   tearDown(() => root.deleteSync(recursive: true));
 
-  testWidgets('starts on the match tab and prompts for stored images', (tester) async {
+  testWidgets('starts on the match tab and prompts for stored images',
+      (tester) async {
     await tester.pumpWidget(PocApp(state: state));
     await tester.pumpAndSettle();
 
@@ -61,7 +62,8 @@ void main() {
     expect(find.textContaining('1 stored image'), findsOneWidget);
   });
 
-  testWidgets('the result screen reports a match with its candidates', (tester) async {
+  testWidgets('the result screen reports a match with its candidates',
+      (tester) async {
     final bytes = _jpeg();
     final signature = ImageSignature.fromBytes(bytes)!;
     final file = File('${root.path}/amber.jpg')..writeAsBytesSync(bytes);

@@ -35,7 +35,8 @@ class PerceptualMatcher implements Matcher {
     final stopwatch = Stopwatch()..start();
     final signature = ImageSignature.fromBytes(probe);
     if (signature == null) {
-      throw const FormatException('The selected file is not a supported image.');
+      throw const FormatException(
+          'The selected file is not a supported image.');
     }
 
     final candidates = gallery.map((stored) {

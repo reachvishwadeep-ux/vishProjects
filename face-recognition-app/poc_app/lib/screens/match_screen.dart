@@ -18,10 +18,14 @@ class MatchScreen extends StatelessWidget {
       imageQuality: 92,
       maxWidth: 1800,
     );
-    if (picked == null || !context.mounted) {
+    if (picked == null) {
       return;
     }
-    await _compare(context, await picked.readAsBytes());
+    final bytes = await picked.readAsBytes();
+    if (!context.mounted) {
+      return;
+    }
+    await _compare(context, bytes);
   }
 
   Future<void> _compare(BuildContext context, Uint8List bytes) async {
@@ -83,7 +87,10 @@ class MatchScreen extends StatelessWidget {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.78),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surface
+                      .withValues(alpha: 0.78),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -103,14 +110,17 @@ class MatchScreen extends StatelessWidget {
               Text(
                 'The comparison stays on this device.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 22),
               Row(
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: state.matching ? null : () => _pick(context, ImageSource.gallery),
+                      onPressed: state.matching
+                          ? null
+                          : () => _pick(context, ImageSource.gallery),
                       icon: const Icon(Icons.photo_library_rounded),
                       label: const Text('Gallery'),
                     ),
@@ -118,7 +128,9 @@ class MatchScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: state.matching ? null : () => _pick(context, ImageSource.camera),
+                      onPressed: state.matching
+                          ? null
+                          : () => _pick(context, ImageSource.camera),
                       icon: const Icon(Icons.camera_alt_rounded),
                       label: const Text('Camera'),
                     ),
@@ -158,7 +170,8 @@ class MatchScreen extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 6),
-                  const Text('Add four generated images so you can try matching immediately.'),
+                  const Text(
+                      'Add four generated images so you can try matching immediately.'),
                   const SizedBox(height: 16),
                   FilledButton.tonalIcon(
                     onPressed: state.loading ? null : state.addDemoImages,
@@ -185,21 +198,24 @@ class MatchScreen extends StatelessWidget {
                       const SizedBox(width: 10),
                       Text(
                         '${state.gallery.length} images ready',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text('Try both deterministic demo outcomes before selecting your own photo.'),
+                  const Text(
+                      'Try both deterministic demo outcomes before selecting your own photo.'),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: FilledButton.tonal(
                           onPressed: () async {
-                            final bytes = await state.demoProbe(state.gallery.first);
+                            final bytes =
+                                await state.demoProbe(state.gallery.first);
                             if (context.mounted) {
                               await _compare(context, bytes);
                             }
@@ -210,7 +226,8 @@ class MatchScreen extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => _compare(context, buildUnknownDemo()),
+                          onPressed: () =>
+                              _compare(context, buildUnknownDemo()),
                           child: const Text('Try no match'),
                         ),
                       ),

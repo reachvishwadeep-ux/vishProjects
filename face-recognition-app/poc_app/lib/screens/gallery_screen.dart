@@ -13,7 +13,8 @@ class GalleryScreen extends StatelessWidget {
   final AppState state;
 
   Future<void> _addImage(BuildContext context) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 94);
+    final picked = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 94);
     if (picked == null || !context.mounted) {
       return;
     }
@@ -47,10 +48,12 @@ class GalleryScreen extends StatelessWidget {
       return;
     }
 
-    final image = await state.addImage(bytes: await picked.readAsBytes(), label: label);
+    final image =
+        await state.addImage(bytes: await picked.readAsBytes(), label: label);
     if (image == null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('That file could not be decoded as an image.')),
+        const SnackBar(
+            content: Text('That file could not be decoded as an image.')),
       );
     }
   }
@@ -90,7 +93,8 @@ class GalleryScreen extends StatelessWidget {
                   const SizedBox(height: 5),
                   Text(
                     '$count stored ${count == 1 ? 'image' : 'images'} · on this device',
-                    style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.outline),
                   ),
                 ],
               ),
@@ -104,26 +108,37 @@ class GalleryScreen extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         if (state.loading)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(48),
-              child: CircularProgressIndicator(),
+          const Padding(
+            padding: EdgeInsets.all(48),
+            child: Column(
+              children: [
+                Icon(Icons.hourglass_top_rounded, size: 36),
+                SizedBox(height: 12),
+                Text('Loading repository…'),
+              ],
             ),
           )
         else if (state.gallery.isEmpty)
-          _EmptyGallery(onAddDemo: state.addDemoImages, onAddImage: () => _addImage(context))
+          _EmptyGallery(
+              onAddDemo: state.addDemoImages,
+              onAddImage: () => _addImage(context))
         else ...[
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.55),
+              color: Theme.of(context)
+                  .colorScheme
+                  .secondaryContainer
+                  .withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(18),
             ),
             child: const Row(
               children: [
                 Icon(Icons.touch_app_rounded),
                 SizedBox(width: 10),
-                Expanded(child: Text('Tap a stored image to test it as a recompressed upload.')),
+                Expanded(
+                    child: Text(
+                        'Tap a stored image to test it as a recompressed upload.')),
               ],
             ),
           ),
@@ -158,7 +173,8 @@ class GalleryScreen extends StatelessWidget {
                               child: IconButton.filledTonal(
                                 tooltip: 'Remove',
                                 onPressed: () => state.removeImage(image.id),
-                                icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    size: 20),
                               ),
                             ),
                           ],
@@ -186,7 +202,8 @@ class GalleryScreen extends StatelessWidget {
                 context: context,
                 builder: (dialogContext) => AlertDialog(
                   title: const Text('Clear repository?'),
-                  content: const Text('All stored images and cached signatures will be deleted.'),
+                  content: const Text(
+                      'All stored images and cached signatures will be deleted.'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(dialogContext, false),
@@ -233,7 +250,10 @@ class _EmptyGallery extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'No stored images yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -246,7 +266,9 @@ class _EmptyGallery extends StatelessWidget {
               icon: const Icon(Icons.auto_awesome_rounded),
               label: const Text('Add demo images'),
             ),
-            TextButton(onPressed: onAddImage, child: const Text('Choose my own image')),
+            TextButton(
+                onPressed: onAddImage,
+                child: const Text('Choose my own image')),
           ],
         ),
       ),

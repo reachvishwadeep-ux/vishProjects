@@ -15,7 +15,12 @@ class ImageSignature {
   final List<double> colourHistogram;
 
   static ImageSignature? fromBytes(Uint8List bytes) {
-    final decoded = img.decodeImage(bytes);
+    final img.Image? decoded;
+    try {
+      decoded = img.decodeImage(bytes);
+    } catch (_) {
+      return null;
+    }
     if (decoded == null) {
       return null;
     }
@@ -53,8 +58,14 @@ class ImageSignature {
 
   factory ImageSignature.fromJson(Map<String, Object?> json) {
     return ImageSignature(
-      dHash: (json['dHash']! as List<Object?>).cast<num>().map((value) => value.toInt()).toList(),
-      pHash: (json['pHash']! as List<Object?>).cast<num>().map((value) => value.toInt()).toList(),
+      dHash: (json['dHash']! as List<Object?>)
+          .cast<num>()
+          .map((value) => value.toInt())
+          .toList(),
+      pHash: (json['pHash']! as List<Object?>)
+          .cast<num>()
+          .map((value) => value.toInt())
+          .toList(),
       colourHistogram: (json['colourHistogram']! as List<Object?>)
           .cast<num>()
           .map((value) => value.toDouble())
@@ -63,19 +74,23 @@ class ImageSignature {
   }
 
   static List<int> _differenceHash(img.Image source) {
-    final grayscale = img.grayscale(img.copyResize(source, width: 9, height: 8));
+    final grayscale =
+        img.grayscale(img.copyResize(source, width: 9, height: 8));
     final bits = <int>[];
 
     for (var y = 0; y < 8; y++) {
       for (var x = 0; x < 8; x++) {
-        bits.add(grayscale.getPixel(x, y).r > grayscale.getPixel(x + 1, y).r ? 1 : 0);
+        bits.add(grayscale.getPixel(x, y).r > grayscale.getPixel(x + 1, y).r
+            ? 1
+            : 0);
       }
     }
     return bits;
   }
 
   static List<int> _perceptualHash(img.Image source) {
-    final grayscale = img.grayscale(img.copyResize(source, width: 32, height: 32));
+    final grayscale =
+        img.grayscale(img.copyResize(source, width: 32, height: 32));
     final pixels = List.generate(
       32,
       (y) => List.generate(32, (x) => grayscale.getPixel(x, y).r.toDouble()),
