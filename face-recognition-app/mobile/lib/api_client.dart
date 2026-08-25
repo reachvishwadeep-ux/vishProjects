@@ -8,8 +8,8 @@ import 'models.dart';
 
 class ApiClient {
   ApiClient({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      _baseUrl = baseUrl ?? Config.apiBaseUrl;
+      : _client = client ?? http.Client(),
+        _baseUrl = baseUrl ?? Config.apiBaseUrl;
 
   final http.Client _client;
   final String _baseUrl;
@@ -76,8 +76,8 @@ class ApiClient {
       if (detail is Map<String, dynamic>) {
         return ApiException(
           detail['error'] as String? ?? 'request failed',
-          reasons: (detail['reasons'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          reasons:
+              (detail['reasons'] as List<dynamic>? ?? const []).cast<String>(),
         );
       }
       return ApiException(

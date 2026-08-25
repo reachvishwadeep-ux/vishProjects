@@ -18,14 +18,14 @@ class Quality {
   final List<String> reasons;
 
   factory Quality.fromJson(Map<String, dynamic> json) => Quality(
-    facePixels: json['face_pixels'] as int,
-    detScore: (json['det_score'] as num).toDouble(),
-    blurVariance: (json['blur_variance'] as num).toDouble(),
-    yawDegrees: (json['yaw_degrees'] as num).toDouble(),
-    score: (json['score'] as num).toDouble(),
-    passed: json['passed'] as bool,
-    reasons: (json['reasons'] as List<dynamic>).cast<String>(),
-  );
+        facePixels: json['face_pixels'] as int,
+        detScore: (json['det_score'] as num).toDouble(),
+        blurVariance: (json['blur_variance'] as num).toDouble(),
+        yawDegrees: (json['yaw_degrees'] as num).toDouble(),
+        score: (json['score'] as num).toDouble(),
+        passed: json['passed'] as bool,
+        reasons: (json['reasons'] as List<dynamic>).cast<String>(),
+      );
 }
 
 class EnrollResult {
@@ -40,10 +40,10 @@ class EnrollResult {
   final Quality quality;
 
   factory EnrollResult.fromJson(Map<String, dynamic> json) => EnrollResult(
-    personId: json['person_id'] as String,
-    displayName: json['display_name'] as String,
-    quality: Quality.fromJson(json['quality'] as Map<String, dynamic>),
-  );
+        personId: json['person_id'] as String,
+        displayName: json['display_name'] as String,
+        quality: Quality.fromJson(json['quality'] as Map<String, dynamic>),
+      );
 }
 
 class Match {
@@ -60,11 +60,11 @@ class Match {
   final String? imageUrl;
 
   factory Match.fromJson(Map<String, dynamic> json) => Match(
-    personId: json['person_id'] as String,
-    displayName: json['display_name'] as String,
-    score: (json['score'] as num).toDouble(),
-    imageUrl: json['image_url'] as String?,
-  );
+        personId: json['person_id'] as String,
+        displayName: json['display_name'] as String,
+        score: (json['score'] as num).toDouble(),
+        imageUrl: json['image_url'] as String?,
+      );
 }
 
 /// `match` is above the threshold, `review` is borderline and needs a human,
@@ -72,10 +72,10 @@ class Match {
 enum Decision { match, review, noMatch }
 
 Decision decisionFromString(String value) => switch (value) {
-  'match' => Decision.match,
-  'review' => Decision.review,
-  _ => Decision.noMatch,
-};
+      'match' => Decision.match,
+      'review' => Decision.review,
+      _ => Decision.noMatch,
+    };
 
 class SearchResult {
   SearchResult({
@@ -89,12 +89,12 @@ class SearchResult {
   final List<Match> results;
 
   factory SearchResult.fromJson(Map<String, dynamic> json) => SearchResult(
-    decision: decisionFromString(json['decision'] as String),
-    threshold: (json['threshold'] as num).toDouble(),
-    results: (json['results'] as List<dynamic>)
-        .map((entry) => Match.fromJson(entry as Map<String, dynamic>))
-        .toList(),
-  );
+        decision: decisionFromString(json['decision'] as String),
+        threshold: (json['threshold'] as num).toDouble(),
+        results: (json['results'] as List<dynamic>)
+            .map((entry) => Match.fromJson(entry as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 class Person {
@@ -105,13 +105,14 @@ class Person {
   final List<String> faceUrls;
 
   factory Person.fromJson(Map<String, dynamic> json) => Person(
-    id: json['id'] as String,
-    displayName: json['display_name'] as String,
-    faceUrls: (json['faces'] as List<dynamic>)
-        .map((entry) => (entry as Map<String, dynamic>)['image_url'] as String?)
-        .whereType<String>()
-        .toList(),
-  );
+        id: json['id'] as String,
+        displayName: json['display_name'] as String,
+        faceUrls: (json['faces'] as List<dynamic>)
+            .map((entry) =>
+                (entry as Map<String, dynamic>)['image_url'] as String?)
+            .whereType<String>()
+            .toList(),
+      );
 }
 
 class ApiException implements Exception {
