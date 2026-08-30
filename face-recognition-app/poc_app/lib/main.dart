@@ -37,10 +37,10 @@ class _PocAppState extends State<PocApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Image Match',
+      title: 'MatchSnap',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ThemeMode.light,
       home: AppShell(state: widget.state),
     );
   }

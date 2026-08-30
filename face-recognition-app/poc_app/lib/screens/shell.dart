@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import 'gallery_screen.dart';
 import 'match_screen.dart';
+import 'my_matches_screen.dart';
+import 'profile_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.state});
@@ -22,53 +24,45 @@ class _AppShellState extends State<AppShell> {
       animation: widget.state,
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(
-            titleSpacing: 20,
-            title: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.image_search_rounded,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Image Match',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-          ),
           body: IndexedStack(
             index: _index,
             children: [
               MatchScreen(state: widget.state),
+              const MyMatchesScreen(),
               GalleryScreen(state: widget.state),
+              const ProfileScreen(),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (value) => setState(() => _index = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.search_rounded),
-                selectedIcon: Icon(Icons.manage_search_rounded),
-                label: 'Match',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.photo_library_outlined),
-                selectedIcon: Icon(Icons.photo_library_rounded),
-                label: 'Repository',
-              ),
-            ],
+          bottomNavigationBar: DecoratedBox(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFE8E9EF))),
+            ),
+            child: NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (value) => setState(() => _index = value),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.photo_camera_outlined),
+                  selectedIcon: Icon(Icons.photo_camera_rounded),
+                  label: 'Upload',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.cancel_outlined),
+                  selectedIcon: Icon(Icons.cancel_rounded),
+                  label: 'My Matches',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.bookmark_border_rounded),
+                  selectedIcon: Icon(Icons.bookmark_rounded),
+                  label: 'Saved Info',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: 'Profile',
+                ),
+              ],
+            ),
           ),
         );
       },

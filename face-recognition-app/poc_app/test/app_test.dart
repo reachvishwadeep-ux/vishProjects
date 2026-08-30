@@ -32,18 +32,18 @@ void main() {
   });
   tearDown(() => root.deleteSync(recursive: true));
 
-  testWidgets('starts on the match tab and prompts for stored images',
+  testWidgets('starts on the upload tab and exposes the redesigned flow',
       (tester) async {
     await tester.pumpWidget(PocApp(state: state));
     await tester.pumpAndSettle();
 
-    expect(find.text('Is this photo already stored?'), findsOneWidget);
-    expect(find.text('Upload a photo to compare'), findsOneWidget);
+    expect(find.text('Upload. Match.\nConnect.'), findsOneWidget);
+    expect(find.text('Choose from Gallery'), findsOneWidget);
 
-    await tester.tap(find.text('Repository'));
+    await tester.tap(find.text('Saved Info'));
     await tester.pumpAndSettle();
 
-    expect(find.text('No stored images yet'), findsOneWidget);
+    expect(find.text('No saved images yet'), findsOneWidget);
   });
 
   testWidgets('stored images appear in the repository tab', (tester) async {
@@ -55,11 +55,11 @@ void main() {
     await tester.pumpWidget(PocApp(state: state));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Repository'));
+    await tester.tap(find.text('Saved Info'));
     await tester.pumpAndSettle();
 
     expect(find.text('Amber Ridge'), findsOneWidget);
-    expect(find.textContaining('1 stored image'), findsOneWidget);
+    expect(find.textContaining('1 saved image'), findsOneWidget);
   });
 
   testWidgets('the result screen reports a match with its candidates',
@@ -99,9 +99,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Match found'), findsOneWidget);
-    expect(find.text('Amber Ridge'), findsOneWidget);
+    expect(find.text('MATCH FOUND!'), findsOneWidget);
+    expect(find.text('It’s an identical snap!'), findsOneWidget);
+    expect(find.text('Elena Rostova'), findsOneWidget);
     expect(find.text('97%'), findsOneWidget);
-    expect(find.textContaining('Perceptual hash'), findsOneWidget);
   });
 }
