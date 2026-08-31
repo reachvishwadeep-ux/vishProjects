@@ -52,20 +52,25 @@ class AppState extends ChangeNotifier {
 
   Future<void> addDemoImages() async {
     await initialize();
-    if (_gallery.isNotEmpty) {
-      return;
-    }
     _loading = true;
     notifyListeners();
-    for (final sample in buildDemoSet()) {
-      final image =
-          await repository.add(bytes: sample.bytes, label: sample.label);
-      if (image != null) {
-        _gallery.insert(0, image);
+    try {
+      final existingLabels = _gallery.map((image) => image.label).toSet();
+      final samples = await buildDemoSet();
+      for (final sample in samples.reversed) {
+        if (existingLabels.contains(sample.label)) {
+          continue;
+        }
+        final image =
+            await repository.add(bytes: sample.bytes, label: sample.label);
+        if (image != null) {
+          _gallery.insert(0, image);
+        }
       }
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
-    _loading = false;
-    notifyListeners();
   }
 
   Future<void> removeImage(String id) async {

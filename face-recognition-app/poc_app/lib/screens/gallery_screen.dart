@@ -260,14 +260,14 @@ class _EmptyGallery extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Add your own image or load a generated sample set. Nothing leaves this device.',
+              'Add your own image or load the authorized reference set. Nothing leaves this device.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: onAddDemo,
               icon: const Icon(Icons.auto_awesome_rounded),
-              label: const Text('Add demo images'),
+              label: const Text('Add reference photos'),
             ),
             TextButton(
                 onPressed: onAddImage,

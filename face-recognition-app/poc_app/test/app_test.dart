@@ -101,7 +101,7 @@ void main() {
 
     expect(find.text('MATCH FOUND!'), findsOneWidget);
     expect(find.text('It’s an identical snap!'), findsOneWidget);
-    expect(find.text('Elena Rostova'), findsOneWidget);
+    expect(find.text('Amber Ridge'), findsOneWidget);
     expect(find.text('97%'), findsOneWidget);
   });
 }

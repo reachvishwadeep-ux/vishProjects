@@ -46,15 +46,17 @@ class MatchScreen extends StatelessWidget {
   }
 
   Future<void> _tryMatch(BuildContext context) async {
-    if (state.gallery.isEmpty) {
-      await state.addDemoImages();
-    }
+    await state.addDemoImages();
     if (!context.mounted || state.gallery.isEmpty) {
       return;
     }
-    final bytes = await state.demoProbe(state.gallery.first);
+    final reference = state.gallery.firstWhere(
+      (image) => image.label == demoPortraitAssets.first.label,
+      orElse: () => state.gallery.first,
+    );
+    final bytes = await state.demoProbe(reference);
     if (context.mounted) {
-      _openActiveUpload(context, bytes, 'demo-match.jpg');
+      _openActiveUpload(context, bytes, 'reference-portrait-match.jpg');
     }
   }
 

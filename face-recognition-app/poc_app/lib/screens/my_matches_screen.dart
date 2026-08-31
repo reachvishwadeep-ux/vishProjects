@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import '../repository/sample_set.dart';
@@ -10,28 +8,27 @@ class MyMatchesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final samples = buildDemoSet();
     final matches = [
       _PreviewMatch(
-        name: 'Marcus Aurelius',
-        location: 'San Francisco, CA',
+        name: 'Reference profile 1',
+        location: 'Authorized demo images',
         time: '2 hours ago',
-        yourSnap: samples[0].bytes,
-        theirSnap: samples[0].bytes,
+        yourSnap: demoPortraitAssets[1].path,
+        theirSnap: demoPortraitAssets[0].path,
       ),
       _PreviewMatch(
-        name: 'Sarah Jenkins',
-        location: 'Denver, CO',
+        name: 'Reference profile 2',
+        location: 'Authorized demo images',
         time: 'Yesterday, 4:15 PM',
-        yourSnap: samples[1].bytes,
-        theirSnap: samples[1].bytes,
+        yourSnap: demoPortraitAssets[2].path,
+        theirSnap: demoPortraitAssets[0].path,
       ),
       _PreviewMatch(
-        name: 'Kenji Sato',
-        location: 'Tokyo, JP',
+        name: 'Reference profile 3',
+        location: 'Authorized demo images',
         time: '3 days ago',
-        yourSnap: samples[2].bytes,
-        theirSnap: samples[2].bytes,
+        yourSnap: demoPortraitAssets[1].path,
+        theirSnap: demoPortraitAssets[2].path,
       ),
     ];
 
@@ -148,7 +145,7 @@ class _MatchPreviewCard extends StatelessWidget {
                 Expanded(
                   child: _SnapPreview(
                     label: 'Your Snap',
-                    bytes: match.yourSnap,
+                    assetPath: match.yourSnap,
                     labelColor: brandInk,
                   ),
                 ),
@@ -156,7 +153,7 @@ class _MatchPreviewCard extends StatelessWidget {
                 Expanded(
                   child: _SnapPreview(
                     label: 'Their Snap',
-                    bytes: match.theirSnap,
+                    assetPath: match.theirSnap,
                     labelColor: brandPurple,
                   ),
                 ),
@@ -196,12 +193,12 @@ class _MatchPreviewCard extends StatelessWidget {
 class _SnapPreview extends StatelessWidget {
   const _SnapPreview({
     required this.label,
-    required this.bytes,
+    required this.assetPath,
     required this.labelColor,
   });
 
   final String label;
-  final Uint8List bytes;
+  final String assetPath;
   final Color labelColor;
 
   @override
@@ -213,7 +210,7 @@ class _SnapPreview extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.memory(bytes, fit: BoxFit.cover),
+            Image.asset(assetPath, fit: BoxFit.cover),
             Positioned(
               left: 7,
               top: 7,
@@ -252,8 +249,8 @@ class _PreviewMatch {
   final String name;
   final String location;
   final String time;
-  final Uint8List yourSnap;
-  final Uint8List theirSnap;
+  final String yourSnap;
+  final String theirSnap;
 }
 
 void _showPrototypeMessage(BuildContext context) {

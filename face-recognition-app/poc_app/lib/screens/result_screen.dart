@@ -167,7 +167,7 @@ class _MatchFoundResult extends StatelessWidget {
                       radius: 23,
                       backgroundColor: brandLavender,
                       child: Text(
-                        'ER',
+                        'RP',
                         style: TextStyle(
                           color: brandPurple,
                           fontWeight: FontWeight.w900,
@@ -175,17 +175,17 @@ class _MatchFoundResult extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Elena Rostova',
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                            best.image.label,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
                           ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Mock profile · Seattle, WA',
+                          const SizedBox(height: 3),
+                          const Text(
+                            'Authorized demo image',
                             style: TextStyle(color: brandMuted, fontSize: 12),
                           ),
                         ],
@@ -215,13 +215,13 @@ class _MatchFoundResult extends StatelessWidget {
                 const _ContactRow(
                   icon: Icons.mail_outline_rounded,
                   label: 'EMAIL ADDRESS',
-                  value: 'elena.r@matchsnap.demo',
+                  value: 'reference@matchsnap.demo',
                 ),
                 const SizedBox(height: 13),
                 const _ContactRow(
                   icon: Icons.phone_in_talk_outlined,
                   label: 'PHONE NUMBER',
-                  value: '+1 (206) 555-0192',
+                  value: 'Not provided',
                 ),
               ],
             ),
@@ -235,7 +235,7 @@ class _MatchFoundResult extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Mock identity and contact details for visual prototype',
+          'Authorized reference image · mock contact details',
           textAlign: TextAlign.center,
           style: TextStyle(color: brandMuted, fontSize: 11),
         ),
