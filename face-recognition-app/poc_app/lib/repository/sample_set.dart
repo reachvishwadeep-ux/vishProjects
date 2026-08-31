@@ -28,6 +28,10 @@ const demoPortraitAssets = [
     label: 'Reference portrait 3',
     path: 'assets/demo/reference_portrait_3.png',
   ),
+  DemoAsset(
+    label: 'Reference portrait 4',
+    path: 'assets/demo/reference_portrait_4.png',
+  ),
 ];
 
 Future<List<DemoImage>> buildDemoSet() async {

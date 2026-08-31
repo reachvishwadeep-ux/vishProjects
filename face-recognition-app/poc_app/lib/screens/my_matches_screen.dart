@@ -30,6 +30,13 @@ class MyMatchesScreen extends StatelessWidget {
         yourSnap: demoPortraitAssets[1].path,
         theirSnap: demoPortraitAssets[2].path,
       ),
+      _PreviewMatch(
+        name: 'Reference profile 4',
+        location: 'Authorized demo images',
+        time: 'Last week',
+        yourSnap: demoPortraitAssets[3].path,
+        theirSnap: demoPortraitAssets[1].path,
+      ),
     ];
 
     return SafeArea(
