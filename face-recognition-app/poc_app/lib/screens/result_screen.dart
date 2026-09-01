@@ -118,6 +118,7 @@ class _MatchFoundResult extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               SizedBox(
+                width: double.infinity,
                 height: 188,
                 child: Stack(
                   alignment: Alignment.center,
