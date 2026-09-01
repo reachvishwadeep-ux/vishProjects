@@ -41,7 +41,7 @@ class MyMatchesScreen extends StatelessWidget {
 
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 112),
         children: [
           Row(
             children: [
@@ -54,6 +54,7 @@ class MyMatchesScreen extends StatelessWidget {
                       style:
                           Theme.of(context).textTheme.headlineMedium?.copyWith(
                                 fontWeight: FontWeight.w900,
+                                letterSpacing: -.6,
                               ),
                     ),
                     const SizedBox(height: 4),
@@ -67,14 +68,79 @@ class MyMatchesScreen extends StatelessWidget {
               IconButton.outlined(
                 tooltip: 'Filter matches',
                 onPressed: () => _showPrototypeMessage(context),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: brandPurple,
+                ),
                 icon: const Icon(Icons.tune_rounded),
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.fromLTRB(17, 16, 14, 16),
+            decoration: BoxDecoration(
+              gradient: brandGradient,
+              borderRadius: BorderRadius.circular(23),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x297057F5),
+                  blurRadius: 22,
+                  offset: Offset(0, 9),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.favorite_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${matches.length} possible connections',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Photos paired for this visual prototype',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .75),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
           ...matches.map(
             (match) => Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.only(bottom: 16),
               child: _MatchPreviewCard(match: match),
             ),
           ),
@@ -103,22 +169,17 @@ class _MatchPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(15),
         child: Column(
           children: [
             Row(
               children: [
                 CircleAvatar(
-                  radius: 20,
+                  radius: 22,
                   backgroundColor: brandLavender,
-                  child: Text(
-                    match.name.split(' ').take(2).map((part) => part[0]).join(),
-                    style: const TextStyle(
-                      color: brandPurple,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  backgroundImage: AssetImage(match.theirSnap),
                 ),
                 const SizedBox(width: 11),
                 Expanded(
@@ -140,33 +201,70 @@ class _MatchPreviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Text(
-                  match.time,
-                  style: const TextStyle(color: brandMuted, fontSize: 11),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: brandLavender,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    match.time,
+                    style: const TextStyle(
+                      color: brandPurple,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 13),
-            Row(
+            const SizedBox(height: 14),
+            Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
-                  child: _SnapPreview(
-                    label: 'Your Snap',
-                    assetPath: match.yourSnap,
-                    labelColor: brandInk,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SnapPreview(
+                        label: 'YOUR SNAP',
+                        assetPath: match.yourSnap,
+                        labelColor: brandInk,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _SnapPreview(
+                        label: 'FOUND SNAP',
+                        assetPath: match.theirSnap,
+                        labelColor: brandPurple,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SnapPreview(
-                    label: 'Their Snap',
-                    assetPath: match.theirSnap,
-                    labelColor: brandPurple,
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    gradient: brandGradient,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x337057F5),
+                        blurRadius: 13,
+                        offset: Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.link_rounded,
+                    color: Colors.white,
+                    size: 19,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -176,9 +274,12 @@ class _MatchPreviewCard extends StatelessWidget {
                         const Icon(Icons.chat_bubble_outline_rounded, size: 18),
                     label: const Text('Chat Now'),
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, 42),
+                      minimumSize: const Size(0, 44),
                       backgroundColor: brandLavender,
                       foregroundColor: brandPurple,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                     ),
                   ),
                 ),
@@ -211,28 +312,38 @@ class _SnapPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
-      aspectRatio: 1.65,
+      aspectRatio: 1.3,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(15),
         child: Stack(
           fit: StackFit.expand,
           children: [
             Image.asset(assetPath, fit: BoxFit.cover),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.transparent, Color(0x66000000)],
+                  begin: Alignment.center,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
             Positioned(
-              left: 7,
-              top: 7,
+              left: 8,
+              bottom: 8,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                 decoration: BoxDecoration(
-                  color: labelColor.withValues(alpha: .84),
-                  borderRadius: BorderRadius.circular(5),
+                  color: labelColor.withValues(alpha: .88),
+                  borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
                   label,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .3,
                   ),
                 ),
               ),

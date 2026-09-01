@@ -41,6 +41,7 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Match result'),
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_rounded),
@@ -82,95 +83,125 @@ class _MatchFoundResult extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
       children: [
-        const Center(
-          child: _StatusPill(
-            label: 'MATCH FOUND!',
-            icon: Icons.auto_awesome_rounded,
-            color: brandGreen,
-            background: Color(0xFFEAF9F2),
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+          decoration: BoxDecoration(
+            gradient: brandSoftGradient,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE7E1FF)),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          decisionTitle(outcome.decision),
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                letterSpacing: -.5,
-              ),
-        ),
-        const SizedBox(height: 18),
-        SizedBox(
-          height: 186,
-          child: Stack(
-            alignment: Alignment.center,
+          child: Column(
             children: [
-              Positioned(
-                left: 27,
-                top: 8,
-                child: Transform.rotate(
-                  angle: -.055,
-                  child: _SnapCard(
-                    image: Image.memory(probe, fit: BoxFit.cover),
-                  ),
+              const _StatusPill(
+                label: 'MATCH FOUND!',
+                icon: Icons.auto_awesome_rounded,
+                color: brandGreen,
+                background: Color(0xFFE8F9F1),
+              ),
+              const SizedBox(height: 11),
+              Text(
+                decisionTitle(outcome.decision),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.7,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Two photos captured the same moment.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: brandMuted.withValues(alpha: .95),
+                  fontSize: 13,
                 ),
               ),
-              Positioned(
-                right: 27,
-                top: 18,
-                child: Transform.rotate(
-                  angle: .075,
-                  child: _SnapCard(
-                    image: Image.file(
-                      File(best.image.path),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
-                        color: brandLavender,
-                        child: Icon(Icons.image_outlined, color: brandPurple),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 188,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      left: 9,
+                      top: 8,
+                      child: Transform.rotate(
+                        angle: -.055,
+                        child: _SnapCard(
+                          image: Image.memory(probe, fit: BoxFit.cover),
+                          label: 'YOUR SNAP',
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: brandPurple,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x336C5CE7),
-                      blurRadius: 14,
-                      offset: Offset(0, 5),
+                    Positioned(
+                      right: 9,
+                      top: 18,
+                      child: Transform.rotate(
+                        angle: .075,
+                        child: _SnapCard(
+                          image: Image.file(
+                            File(best.image.path),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const ColoredBox(
+                              color: brandLavender,
+                              child: Icon(
+                                Icons.image_outlined,
+                                color: brandPurple,
+                              ),
+                            ),
+                          ),
+                          label: 'FOUND SNAP',
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        gradient: brandGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x3D7057F5),
+                            blurRadius: 18,
+                            offset: Offset(0, 7),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.link_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ],
-                ),
-                child: const Icon(
-                  Icons.link_rounded,
-                  color: Colors.white,
-                  size: 23,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(17),
             child: Column(
               children: [
                 Row(
                   children: [
-                    const CircleAvatar(
-                      radius: 23,
-                      backgroundColor: brandLavender,
-                      child: Text(
-                        'RP',
-                        style: TextStyle(
-                          color: brandPurple,
-                          fontWeight: FontWeight.w900,
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        gradient: brandGradient,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'RP',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                     ),
@@ -181,7 +212,10 @@ class _MatchFoundResult extends StatelessWidget {
                         children: [
                           Text(
                             best.image.label,
-                            style: const TextStyle(fontWeight: FontWeight.w900),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                           const SizedBox(height: 3),
                           const Text(
@@ -193,23 +227,62 @@ class _MatchFoundResult extends StatelessWidget {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 6,
+                        horizontal: 11,
+                        vertical: 7,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEAF9F2),
+                        color: const Color(0xFFE8F9F1),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFC9EFDE)),
                       ),
-                      child: Text(
-                        '$score%',
-                        style: const TextStyle(
-                          color: brandGreen,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.verified_rounded,
+                            color: brandGreen,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$score%',
+                            style: const TextStyle(
+                              color: brandGreen,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 15),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: brandSurface,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_outlined,
+                        color: brandPurple,
+                        size: 18,
+                      ),
+                      SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          'High-confidence local image match',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const Divider(height: 26),
                 const _ContactRow(
@@ -228,10 +301,27 @@ class _MatchFoundResult extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: onChat,
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-          label: const Text('Initiate Chat'),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: brandGradient,
+            borderRadius: BorderRadius.circular(17),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x297057F5),
+                blurRadius: 18,
+                offset: Offset(0, 7),
+              ),
+            ],
+          ),
+          child: FilledButton.icon(
+            onPressed: onChat,
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            label: const Text('Initiate Chat'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         const Text(
@@ -258,40 +348,59 @@ class _NoMatchResult extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
       children: [
-        const Center(
-          child: _StatusPill(
-            label: 'NO MATCH YET',
-            icon: Icons.schedule_rounded,
-            color: brandPurple,
-            background: brandLavender,
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+          decoration: BoxDecoration(
+            gradient: brandSoftGradient,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE7E1FF)),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          decisionTitle(Decision.noMatch),
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                letterSpacing: -.5,
+          child: Column(
+            children: [
+              const _StatusPill(
+                label: 'NO MATCH YET',
+                icon: Icons.schedule_rounded,
+                color: brandPurple,
+                background: Colors.white,
               ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Your snap is saved in this prototype session.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: brandMuted),
-        ),
-        const SizedBox(height: 20),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: AspectRatio(
-              aspectRatio: 1.3,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: Image.memory(probe, fit: BoxFit.cover),
+              const SizedBox(height: 11),
+              Text(
+                decisionTitle(Decision.noMatch),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.7,
+                    ),
               ),
-            ),
+              const SizedBox(height: 7),
+              const Text(
+                'Your snap is saved in this prototype session.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: brandMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 17),
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(21),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1C382E64),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: AspectRatio(
+                  aspectRatio: 1.35,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.memory(probe, fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -300,31 +409,56 @@ class _NoMatchResult extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
             child: Column(
               children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: const BoxDecoration(
-                    color: brandLavender,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.notifications_active_outlined,
-                    color: brandPurple,
-                    size: 30,
-                  ),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 78,
+                      height: 78,
+                      decoration: const BoxDecoration(
+                        color: brandLavender,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: const BoxDecoration(
+                        gradient: brandGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x337057F5),
+                            blurRadius: 16,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active_outlined,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 17),
                 Text(
                   'We’ll keep looking',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
+                        letterSpacing: -.3,
                       ),
                 ),
                 const SizedBox(height: 9),
                 Text(
                   decisionMessage(Decision.noMatch),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: brandMuted, height: 1.5),
+                  style: const TextStyle(
+                    color: brandMuted,
+                    height: 1.5,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 15),
                 Container(
@@ -359,9 +493,10 @@ class _NoMatchResult extends StatelessWidget {
 }
 
 class _SnapCard extends StatelessWidget {
-  const _SnapCard({required this.image});
+  const _SnapCard({required this.image, required this.label});
 
   final Widget image;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +517,32 @@ class _SnapCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: image,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            image,
+            Positioned(
+              left: 7,
+              bottom: 7,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: brandInk.withValues(alpha: .78),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

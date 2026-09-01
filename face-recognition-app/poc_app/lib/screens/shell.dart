@@ -24,6 +24,7 @@ class _AppShellState extends State<AppShell> {
       animation: widget.state,
       builder: (context, _) {
         return Scaffold(
+          extendBody: true,
           body: IndexedStack(
             index: _index,
             children: [
@@ -33,35 +34,50 @@ class _AppShellState extends State<AppShell> {
               const ProfileScreen(),
             ],
           ),
-          bottomNavigationBar: DecoratedBox(
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFE8E9EF))),
-            ),
-            child: NavigationBar(
-              selectedIndex: _index,
-              onDestinationSelected: (value) => setState(() => _index = value),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.photo_camera_outlined),
-                  selectedIcon: Icon(Icons.photo_camera_rounded),
-                  label: 'Upload',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.cancel_outlined),
-                  selectedIcon: Icon(Icons.cancel_rounded),
-                  label: 'My Matches',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bookmark_border_rounded),
-                  selectedIcon: Icon(Icons.bookmark_rounded),
-                  label: 'Saved Info',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
-                ),
-              ],
+          bottomNavigationBar: SafeArea(
+            minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFFF0EDF5)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x22382E64),
+                    blurRadius: 24,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: (value) {
+                  setState(() => _index = value);
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.add_photo_alternate_outlined),
+                    selectedIcon: Icon(Icons.add_photo_alternate_rounded),
+                    label: 'Upload',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.favorite_border_rounded),
+                    selectedIcon: Icon(Icons.favorite_rounded),
+                    label: 'My Matches',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.folder_copy_outlined),
+                    selectedIcon: Icon(Icons.folder_copy_rounded),
+                    label: 'Saved Info',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline_rounded),
+                    selectedIcon: Icon(Icons.person_rounded),
+                    label: 'Profile',
+                  ),
+                ],
+              ),
             ),
           ),
         );

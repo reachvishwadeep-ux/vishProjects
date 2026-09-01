@@ -77,10 +77,10 @@ class GalleryScreen extends StatelessWidget {
     final count = state.gallery.length;
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 112),
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Column(
@@ -91,6 +91,7 @@ class GalleryScreen extends StatelessWidget {
                       style:
                           Theme.of(context).textTheme.headlineMedium?.copyWith(
                                 fontWeight: FontWeight.w900,
+                                letterSpacing: -.6,
                               ),
                     ),
                     const SizedBox(height: 5),
@@ -101,23 +102,42 @@ class GalleryScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton.filled(
-                tooltip: 'Add image',
-                onPressed: () => _addImage(context),
-                icon: const Icon(Icons.add_photo_alternate_rounded),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: brandGradient,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x297057F5),
+                      blurRadius: 16,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  tooltip: 'Add image',
+                  onPressed: () => _addImage(context),
+                  color: Colors.white,
+                  icon: const Icon(Icons.add_photo_alternate_rounded),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 18),
           if (state.loading)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Column(
-                children: [
-                  Icon(Icons.hourglass_top_rounded, size: 36),
-                  SizedBox(height: 12),
-                  Text('Loading repository…'),
-                ],
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(48),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(color: brandPurple),
+                    SizedBox(height: 16),
+                    Text(
+                      'Loading repository…',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
               ),
             )
           else if (state.gallery.isEmpty)
@@ -126,21 +146,37 @@ class GalleryScreen extends StatelessWidget {
                 onAddImage: () => _addImage(context))
           else ...[
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(15, 14, 14, 14),
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .secondaryContainer
-                    .withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(18),
+                color: brandLavender,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE3DFFF)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.touch_app_rounded),
-                  SizedBox(width: 10),
-                  Expanded(
-                      child: Text(
-                          'Tap a stored image to test it as a recompressed upload.')),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.touch_app_rounded,
+                      color: brandPurple,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  const Expanded(
+                    child: Text(
+                      'Tap a stored image to run a quick local comparison.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -151,9 +187,9 @@ class GalleryScreen extends StatelessWidget {
               itemCount: count,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: 0.82,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.76,
               ),
               itemBuilder: (context, index) {
                 final image = state.gallery[index];
@@ -172,23 +208,80 @@ class GalleryScreen extends StatelessWidget {
                               Positioned(
                                 top: 8,
                                 right: 8,
-                                child: IconButton.filledTonal(
-                                  tooltip: 'Remove',
-                                  onPressed: () => state.removeImage(image.id),
-                                  icon: const Icon(Icons.delete_outline_rounded,
-                                      size: 20),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: brandInk.withValues(alpha: .72),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: IconButton(
+                                    tooltip: 'Remove',
+                                    onPressed: () =>
+                                        state.removeImage(image.id),
+                                    color: Colors.white,
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 9,
+                                bottom: 9,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: brandInk.withValues(alpha: .72),
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.lock_outline_rounded,
+                                        color: Colors.white,
+                                        size: 11,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'LOCAL',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: .4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.all(13),
-                          child: Text(
-                            image.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          padding: const EdgeInsets.fromLTRB(12, 11, 10, 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  image.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: brandPurple,
+                                size: 18,
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -242,15 +335,30 @@ class _EmptyGallery extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.fromLTRB(26, 30, 26, 27),
         child: Column(
           children: [
-            Icon(
-              Icons.photo_library_outlined,
-              size: 58,
-              color: Theme.of(context).colorScheme.primary,
+            Container(
+              width: 78,
+              height: 78,
+              decoration: const BoxDecoration(
+                gradient: brandGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x337057F5),
+                    blurRadius: 19,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.photo_library_outlined,
+                size: 34,
+                color: Colors.white,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 19),
             Text(
               'No saved images yet',
               style: Theme.of(context)
@@ -262,16 +370,20 @@ class _EmptyGallery extends StatelessWidget {
             const Text(
               'Add your own image or load the authorized reference set. Nothing leaves this device.',
               textAlign: TextAlign.center,
+              style: TextStyle(color: brandMuted, height: 1.45),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             FilledButton.icon(
               onPressed: onAddDemo,
               icon: const Icon(Icons.auto_awesome_rounded),
               label: const Text('Add reference photos'),
             ),
-            TextButton(
-                onPressed: onAddImage,
-                child: const Text('Choose my own image')),
+            const SizedBox(height: 5),
+            TextButton.icon(
+              onPressed: onAddImage,
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+              label: const Text('Choose my own image'),
+            ),
           ],
         ),
       ),
