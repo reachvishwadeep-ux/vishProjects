@@ -8,10 +8,22 @@ import '../repository/sample_set.dart';
 import '../theme.dart';
 import 'active_upload_screen.dart';
 
-class MatchScreen extends StatelessWidget {
+enum _UploadIntent { looking, found }
+
+class MatchScreen extends StatefulWidget {
   const MatchScreen({super.key, required this.state});
 
   final AppState state;
+
+  @override
+  State<MatchScreen> createState() => _MatchScreenState();
+}
+
+class _MatchScreenState extends State<MatchScreen> {
+  _UploadIntent _intent = _UploadIntent.looking;
+
+  AppState get state => widget.state;
+  bool get _isLooking => _intent == _UploadIntent.looking;
 
   Future<void> _pick(BuildContext context, ImageSource source) async {
     final picked = await ImagePicker().pickImage(
@@ -190,17 +202,19 @@ class MatchScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'Upload. Match.\nConnect.',
+                  'Find a missing person',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
-                        height: .98,
+                        height: 1.05,
                         letterSpacing: -1.1,
                       ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Find the same moment in your private photo collection.',
+                  'This app matches the uploaded image against similar images '
+                  'of people who have been found. If there is a potential '
+                  'match, it will connect you with the other person.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .82),
                     height: 1.45,
@@ -220,6 +234,37 @@ class MatchScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'What are you here to do?',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _IntentCard(
+                  icon: Icons.search_rounded,
+                  label: 'I’m looking for someone',
+                  selected: _isLooking,
+                  onTap: () {
+                    setState(() => _intent = _UploadIntent.looking);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _IntentCard(
+                  icon: Icons.person_pin_circle_outlined,
+                  label: 'I found someone',
+                  selected: !_isLooking,
+                  onTap: () {
+                    setState(() => _intent = _UploadIntent.found);
+                  },
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Card(
@@ -263,8 +308,11 @@ class MatchScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 13),
-                        const Text(
-                          'Select a photograph',
+                        Text(
+                          _isLooking
+                              ? 'Add a photo of the missing person'
+                              : 'Add a photo of the person found',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
@@ -399,6 +447,86 @@ class MatchScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _IntentCard extends StatelessWidget {
+  const _IntentCard({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 96,
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: selected ? brandLavender : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? brandPurple : brandBorder,
+              width: selected ? 1.6 : 1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x12382E64),
+                blurRadius: 14,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected ? brandPurple : brandSurfaceStrong,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: selected ? Colors.white : brandMuted,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? brandPurpleDark : brandInk,
+                    fontSize: 12,
+                    height: 1.25,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                color: selected ? brandPurple : brandBorder,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

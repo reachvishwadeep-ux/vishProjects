@@ -37,7 +37,7 @@ void main() {
     await tester.pumpWidget(PocApp(state: state));
     await tester.pumpAndSettle();
 
-    expect(find.text('Upload. Match.\nConnect.'), findsOneWidget);
+    expect(find.text('Find a missing person'), findsOneWidget);
     expect(find.text('Choose from Gallery'), findsOneWidget);
 
     await tester.tap(find.text('Saved Info'));
