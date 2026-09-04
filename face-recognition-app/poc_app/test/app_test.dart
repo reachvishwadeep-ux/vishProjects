@@ -34,10 +34,21 @@ void main() {
 
   testWidgets('starts on the upload tab and exposes the redesigned flow',
       (tester) async {
-    await tester.pumpWidget(PocApp(state: state));
+    await tester.runAsync(() async {
+      await tester.pumpWidget(PocApp(state: state));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
     await tester.pumpAndSettle();
 
     expect(find.text('Find a missing person'), findsOneWidget);
+    expect(find.text('I’m looking for someone'), findsOneWidget);
+    expect(find.text('I found someone'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Choose from Gallery'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Choose from Gallery'), findsOneWidget);
 
     await tester.tap(find.text('Saved Info'));
