@@ -2,6 +2,8 @@ import 'matching/signature.dart';
 
 enum Decision { match, review, noMatch }
 
+enum CaseType { missing, found }
+
 class StoredImage {
   const StoredImage({
     required this.id,
@@ -9,13 +11,34 @@ class StoredImage {
     required this.path,
     required this.signature,
     required this.addedAt,
+    this.remoteUrl,
   });
+
+  factory StoredImage.remote({
+    required String id,
+    required String label,
+    required String? remoteUrl,
+  }) {
+    return StoredImage(
+      id: id,
+      label: label,
+      path: '',
+      signature: const ImageSignature(
+        dHash: [],
+        pHash: [],
+        colourHistogram: [],
+      ),
+      addedAt: DateTime.now(),
+      remoteUrl: remoteUrl,
+    );
+  }
 
   final String id;
   final String label;
   final String path;
   final ImageSignature signature;
   final DateTime addedAt;
+  final String? remoteUrl;
 
   Map<String, Object> toJson() => {
         'id': id,
@@ -23,6 +46,7 @@ class StoredImage {
         'path': path,
         'signature': signature.toJson(),
         'addedAt': addedAt.toIso8601String(),
+        if (remoteUrl != null) 'remoteUrl': remoteUrl!,
       };
 
   factory StoredImage.fromJson(Map<String, Object?> json) {
@@ -34,6 +58,7 @@ class StoredImage {
         (json['signature']! as Map<Object?, Object?>).cast<String, Object?>(),
       ),
       addedAt: DateTime.parse(json['addedAt']! as String),
+      remoteUrl: json['remoteUrl'] as String?,
     );
   }
 }

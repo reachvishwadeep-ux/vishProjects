@@ -43,6 +43,15 @@ curl -F image=@alice1.jpg -F person_name=Alice localhost:8000/v1/enroll
 curl -F image=@unknown.jpg -F top_k=3        localhost:8000/v1/search
 ```
 
+Create missing/found cases. Each upload searches only the opposite repository, and
+reviewable candidates are retained for later retrieval:
+
+```bash
+curl -F image=@missing.jpg -F case_type=missing localhost:8000/v1/cases
+curl -F image=@found.jpg -F case_type=found     localhost:8000/v1/cases
+curl localhost:8000/v1/cases/<case-id>/matches
+```
+
 Bulk-ingest an existing repository (`repository/<person_name>/*.jpg`):
 
 ```bash
@@ -55,6 +64,9 @@ docker compose exec api python -m scripts.ingest /data/repository
 |---|---|
 | `POST /v1/enroll` | Add a photo. Fields: `image`, `person_name`, `consent_ref?`, `force?`. Rejects low-quality photos unless `force=true`. |
 | `POST /v1/search` | 1:N identification. Returns ranked matches with cosine scores and a `decision` of `match` / `review` / `no_match`. |
+| `POST /v1/cases` | Store a `missing` or `found` case and search only the opposite repository. |
+| `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for a case. |
+| `DELETE /v1/cases/{id}` | Delete a case, its embedding, stored photo, and candidate links. |
 | `GET /v1/persons`, `GET /v1/persons/{id}` | Repository listing with presigned image URLs. |
 | `DELETE /v1/persons/{id}` | Purge a person's vectors and images (GDPR / BIPA erasure). |
 | `GET /health` | Liveness plus the active `model_tag`. |
@@ -112,5 +124,10 @@ pytest
 ruff check app scripts tests && ruff format --check app scripts tests
 ```
 
-Point the mobile app at the API with `--dart-define=API_BASE_URL=...`; the Android
-emulator reaches the host as `http://10.0.2.2:8000`. See [mobile/README.md](mobile/README.md).
+Run the MatchSnap Flutter app from `poc_app` and point it at the API with
+`--dart-define=API_BASE_URL=...`; the Android emulator reaches the host as
+`http://10.0.2.2:8000`.
+
+Set `S3_PUBLIC_ENDPOINT_URL` to the object-storage URL reachable by the phone. Docker
+Compose defaults it to `http://10.0.2.2:9000` for the Android emulator. Use HTTPS URLs
+for both the API and object storage outside local development.

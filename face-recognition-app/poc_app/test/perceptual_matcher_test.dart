@@ -44,8 +44,12 @@ void main() {
   });
 
   test('an empty gallery gives no match and no candidates', () async {
-    final outcome =
-        await matcher.match(probe: _jpeg(_shapes(0)), gallery: const []);
+    final outcome = await matcher.match(
+      probe: _jpeg(_shapes(0)),
+      gallery: const [],
+      caseType: CaseType.missing,
+      fileName: 'probe.jpg',
+    );
 
     expect(outcome.decision, Decision.noMatch);
     expect(outcome.candidates, isEmpty);
@@ -55,8 +59,12 @@ void main() {
 
   test('undecodable uploads are rejected', () {
     expect(
-      () => matcher
-          .match(probe: Uint8List.fromList([9, 9, 9]), gallery: const []),
+      () => matcher.match(
+        probe: Uint8List.fromList([9, 9, 9]),
+        gallery: const [],
+        caseType: CaseType.missing,
+        fileName: 'probe.jpg',
+      ),
       throwsA(isA<FormatException>()),
     );
   });
@@ -70,7 +78,12 @@ void main() {
     ];
     final probe = _jpeg(img.copyResize(_shapes(2), width: 128), quality: 60);
 
-    final outcome = await matcher.match(probe: probe, gallery: gallery);
+    final outcome = await matcher.match(
+      probe: probe,
+      gallery: gallery,
+      caseType: CaseType.missing,
+      fileName: 'probe.jpg',
+    );
 
     expect(outcome.best!.image.label, 'two');
     expect(outcome.decision, Decision.match);
@@ -83,8 +96,12 @@ void main() {
       for (var i = 0; i < 4; i++) _stored('$i', _jpeg(_shapes(i)))
     ];
 
-    final outcome =
-        await matcher.match(probe: _jpeg(_shapes(0)), gallery: gallery);
+    final outcome = await matcher.match(
+      probe: _jpeg(_shapes(0)),
+      gallery: gallery,
+      caseType: CaseType.missing,
+      fileName: 'probe.jpg',
+    );
     final scores = outcome.candidates.map((c) => c.score).toList();
 
     expect(
@@ -97,7 +114,12 @@ void main() {
     ];
 
     final outcome = await matcher.match(
-        probe: _jpeg(_shapes(0)), gallery: gallery, topK: 2);
+      probe: _jpeg(_shapes(0)),
+      gallery: gallery,
+      caseType: CaseType.missing,
+      fileName: 'probe.jpg',
+      topK: 2,
+    );
 
     expect(outcome.candidates.length, 2);
     expect(outcome.comparisons, 5);

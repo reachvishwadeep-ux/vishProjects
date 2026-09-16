@@ -85,12 +85,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<MatchOutcome> compare(Uint8List probe) async {
+  Future<MatchOutcome> compare(
+    Uint8List probe, {
+    required CaseType caseType,
+    required String fileName,
+  }) async {
     await initialize();
     _matching = true;
     notifyListeners();
     try {
-      return await matcher.match(probe: probe, gallery: _gallery);
+      return await matcher.match(
+        probe: probe,
+        gallery: _gallery,
+        caseType: caseType,
+        fileName: fileName,
+      );
     } finally {
       _matching = false;
       notifyListeners();

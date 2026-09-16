@@ -32,7 +32,7 @@ class _ResultScreenState extends State<ResultScreen> {
   void _prototypeAction() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Chat and contact sharing require the online service.'),
+        content: Text('Secure contact requests are not enabled yet.'),
       ),
     );
   }
@@ -109,7 +109,7 @@ class _MatchFoundResult extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Two photos captured the same moment.',
+                'Review this candidate carefully. A similarity score is not proof of identity.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: brandMuted.withValues(alpha: .95),
@@ -140,17 +140,7 @@ class _MatchFoundResult extends StatelessWidget {
                       child: Transform.rotate(
                         angle: .075,
                         child: _SnapCard(
-                          image: Image.file(
-                            File(best.image.path),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const ColoredBox(
-                              color: brandLavender,
-                              child: Icon(
-                                Icons.image_outlined,
-                                color: brandPurple,
-                              ),
-                            ),
-                          ),
+                          image: _candidateImage(best.image),
                           label: 'FOUND SNAP',
                         ),
                       ),
@@ -220,7 +210,7 @@ class _MatchFoundResult extends StatelessWidget {
                           ),
                           const SizedBox(height: 3),
                           const Text(
-                            'Authorized demo image',
+                            'Remote repository candidate',
                             style: TextStyle(color: brandMuted, fontSize: 12),
                           ),
                         ],
@@ -275,7 +265,7 @@ class _MatchFoundResult extends StatelessWidget {
                       SizedBox(width: 9),
                       Expanded(
                         child: Text(
-                          'High-confidence local image match',
+                          'Remote face similarity candidate',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -286,16 +276,14 @@ class _MatchFoundResult extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 26),
-                const _ContactRow(
-                  icon: Icons.mail_outline_rounded,
-                  label: 'EMAIL ADDRESS',
-                  value: 'reference@matchsnap.demo',
-                ),
-                const SizedBox(height: 13),
-                const _ContactRow(
-                  icon: Icons.phone_in_talk_outlined,
-                  label: 'PHONE NUMBER',
-                  value: 'Not provided',
+                const Text(
+                  'Contact information remains hidden until a controlled connection workflow is approved.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: brandMuted,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
@@ -316,8 +304,8 @@ class _MatchFoundResult extends StatelessWidget {
           ),
           child: FilledButton.icon(
             onPressed: onChat,
-            icon: const Icon(Icons.chat_bubble_outline_rounded),
-            label: const Text('Initiate Chat'),
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: const Text('Request secure connection'),
             style: FilledButton.styleFrom(
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,
@@ -326,7 +314,7 @@ class _MatchFoundResult extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Authorized reference image · mock contact details',
+          'Remote candidate · human review required',
           textAlign: TextAlign.center,
           style: TextStyle(color: brandMuted, fontSize: 11),
         ),
@@ -375,7 +363,7 @@ class _NoMatchResult extends StatelessWidget {
               ),
               const SizedBox(height: 7),
               const Text(
-                'Your snap is saved in this prototype session.',
+                'Your photo is stored in the remote repository for future comparisons.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: brandMuted, fontSize: 13),
               ),
@@ -470,7 +458,7 @@ class _NoMatchResult extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
-                    'Alerts are not active in this prototype',
+                    'Notifications will be added with account setup',
                     style: TextStyle(
                       color: Color(0xFF9A6B12),
                       fontSize: 11,
@@ -549,6 +537,37 @@ class _SnapCard extends StatelessWidget {
   }
 }
 
+Widget _candidateImage(StoredImage image) {
+  final remoteUrl = image.remoteUrl;
+  if (remoteUrl != null && remoteUrl.isNotEmpty) {
+    return Image.network(
+      remoteUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const _MissingImage(),
+    );
+  }
+  return Image.file(
+    File(image.path),
+    fit: BoxFit.cover,
+    errorBuilder: (_, __, ___) => const _MissingImage(),
+  );
+}
+
+class _MissingImage extends StatelessWidget {
+  const _MissingImage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: brandLavender,
+      child: Icon(
+        Icons.image_outlined,
+        color: brandPurple,
+      ),
+    );
+  }
+}
+
 class _StatusPill extends StatelessWidget {
   const _StatusPill({
     required this.label,
@@ -586,53 +605,6 @@ class _StatusPill extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: brandLavender,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: brandPurple, size: 17),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: brandMuted,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(value, style: const TextStyle(fontSize: 13)),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

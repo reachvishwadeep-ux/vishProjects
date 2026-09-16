@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
-import 'matching/perceptual_matcher.dart';
+import 'config.dart';
+import 'matching/remote_matcher.dart';
 import 'repository/gallery_repository.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
@@ -12,7 +13,7 @@ void main() {
     PocApp(
       state: AppState(
         repository: GalleryRepository(),
-        matcher: const PerceptualMatcher(),
+        matcher: RemoteMatcher(baseUrl: Config.apiBaseUrl),
       ),
     ),
   );

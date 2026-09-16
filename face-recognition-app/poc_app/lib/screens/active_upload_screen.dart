@@ -13,11 +13,13 @@ class ActiveUploadScreen extends StatefulWidget {
     required this.state,
     required this.probe,
     required this.fileName,
+    required this.caseType,
   });
 
   final AppState state;
   final Uint8List probe;
   final String fileName;
+  final CaseType caseType;
 
   @override
   State<ActiveUploadScreen> createState() => _ActiveUploadScreenState();
@@ -35,8 +37,11 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
 
   Future<void> _search() async {
     try {
-      final match = widget.state.compare(widget.probe);
-      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final match = widget.state.compare(
+        widget.probe,
+        caseType: widget.caseType,
+        fileName: widget.fileName,
+      );
       final outcome = await match;
       if (mounted) {
         setState(() => _outcome = outcome);
@@ -111,8 +116,8 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                       _error != null
                           ? 'SCAN INTERRUPTED'
                           : complete
-                              ? 'SCAN COMPLETE'
-                              : 'LOCAL SCAN ACTIVE',
+                              ? 'SEARCH COMPLETE'
+                              : 'REMOTE SEARCH ACTIVE',
                       style: TextStyle(
                         color: _error != null
                             ? const Color(0xFFD45757)
@@ -289,8 +294,8 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                       _error != null
                           ? 'Choose another supported image and try again.'
                           : complete
-                              ? 'The local comparison finished successfully.'
-                              : 'Comparing your photo with every image saved on this device.',
+                              ? 'The remote comparison finished successfully.'
+                              : 'Uploading and searching the opposite MatchSnap repository.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: brandMuted,
@@ -319,7 +324,7 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                           ),
                           SizedBox(width: 5),
                           Text(
-                            'Processing privately on this device',
+                            'Processing on the remote recognition service',
                             style: TextStyle(
                               color: brandMuted,
                               fontSize: 10,
@@ -349,7 +354,7 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Visual prototype · matching runs only on this device',
+              'Recognition and matching run on the configured remote service',
               textAlign: TextAlign.center,
               style: TextStyle(color: brandMuted, fontSize: 11),
             ),

@@ -111,7 +111,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('MATCH FOUND!'), findsOneWidget);
-    expect(find.text('It’s an identical snap!'), findsOneWidget);
+    expect(find.text('Potential match found'), findsOneWidget);
     expect(find.text('Amber Ridge'), findsOneWidget);
     expect(find.text('97%'), findsOneWidget);
   });

@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.face_engine import get_engine
-from app.routers import faces
+from app.routers import cases, faces
 from app.storage import get_store
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(faces.router)
+app.include_router(cases.router)
 
 
 @app.get("/health")

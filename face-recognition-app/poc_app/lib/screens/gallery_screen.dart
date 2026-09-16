@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
-import '../models.dart';
 import '../theme.dart';
-import 'result_screen.dart';
 
 class GalleryScreen extends StatelessWidget {
   const GalleryScreen({super.key, required this.state});
@@ -57,19 +55,6 @@ class GalleryScreen extends StatelessWidget {
             content: Text('That file could not be decoded as an image.')),
       );
     }
-  }
-
-  Future<void> _compareStored(BuildContext context, StoredImage image) async {
-    final bytes = await state.demoProbe(image);
-    final outcome = await state.compare(bytes);
-    if (!context.mounted) {
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ResultScreen(probe: bytes, outcome: outcome),
-      ),
-    );
   }
 
   @override
@@ -170,7 +155,7 @@ class GalleryScreen extends StatelessWidget {
                   const SizedBox(width: 11),
                   const Expanded(
                     child: Text(
-                      'Tap a stored image to run a quick local comparison.',
+                      'Saved images stay on this device and are not used for matching.',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -196,7 +181,6 @@ class GalleryScreen extends StatelessWidget {
                 return Card(
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: () => _compareStored(context, image),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

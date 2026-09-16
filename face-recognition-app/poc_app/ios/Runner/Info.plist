@@ -23,9 +23,9 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take a photo to compare it against the images stored on this device.</string>
+	<string>Take a photo to submit to the MatchSnap remote recognition service.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pick photos to compare against, or to add to the on-device repository.</string>
+	<string>Pick a photo to submit to the MatchSnap remote recognition service.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

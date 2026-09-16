@@ -158,7 +158,7 @@ Color decisionColor(BuildContext context, Decision decision) {
 
 String decisionTitle(Decision decision) {
   return switch (decision) {
-    Decision.match => 'It’s an identical snap!',
+    Decision.match => 'Potential match found',
     Decision.review => 'Possible match',
     Decision.noMatch => 'No match found',
   };
@@ -166,7 +166,8 @@ String decisionTitle(Decision decision) {
 
 String decisionMessage(Decision decision) {
   return switch (decision) {
-    Decision.match => 'Your photo matched another snap.',
+    Decision.match =>
+      'The remote service found a high-scoring candidate for human review.',
     Decision.review =>
       'A similar image was found. Review the comparison before deciding.',
     Decision.noMatch =>

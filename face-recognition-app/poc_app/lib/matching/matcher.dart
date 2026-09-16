@@ -8,6 +8,8 @@ abstract class Matcher {
   Future<MatchOutcome> match({
     required Uint8List probe,
     required List<StoredImage> gallery,
+    required CaseType caseType,
+    required String fileName,
     int topK = 5,
   });
 }

@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
-import '../repository/sample_set.dart';
+import '../models.dart';
 import '../theme.dart';
 import 'active_upload_screen.dart';
-
-enum _UploadIntent { looking, found }
 
 class MatchScreen extends StatefulWidget {
   const MatchScreen({super.key, required this.state});
@@ -20,10 +18,10 @@ class MatchScreen extends StatefulWidget {
 }
 
 class _MatchScreenState extends State<MatchScreen> {
-  _UploadIntent _intent = _UploadIntent.looking;
+  CaseType _caseType = CaseType.missing;
 
   AppState get state => widget.state;
-  bool get _isLooking => _intent == _UploadIntent.looking;
+  bool get _isLooking => _caseType == CaseType.missing;
 
   Future<void> _pick(BuildContext context, ImageSource source) async {
     final picked = await ImagePicker().pickImage(
@@ -52,24 +50,10 @@ class _MatchScreenState extends State<MatchScreen> {
           state: state,
           probe: bytes,
           fileName: fileName,
+          caseType: _caseType,
         ),
       ),
     );
-  }
-
-  Future<void> _tryMatch(BuildContext context) async {
-    await state.addDemoImages();
-    if (!context.mounted || state.gallery.isEmpty) {
-      return;
-    }
-    final reference = state.gallery.firstWhere(
-      (image) => image.label == demoPortraitAssets.first.label,
-      orElse: () => state.gallery.first,
-    );
-    final bytes = await state.demoProbe(reference);
-    if (context.mounted) {
-      _openActiveUpload(context, bytes, 'reference-portrait-match.jpg');
-    }
   }
 
   void _showHowItWorks(BuildContext context) {
@@ -83,17 +67,17 @@ class _MatchScreenState extends State<MatchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'How this prototype works',
+              'How remote matching works',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
             SizedBox(height: 12),
             Text(
-              'Choose a photo, compare it with the local demo gallery, and preview the future MatchSnap connection experience.',
+              'Choose a photo and MatchSnap uploads it to the recognition service. Missing-person photos search the found repository, and found-person photos search the missing repository.',
               style: TextStyle(color: brandMuted, height: 1.5),
             ),
             SizedBox(height: 12),
             Text(
-              'Continuous online matching, alerts, chat, and contact sharing are visual concepts only.',
+              'Possible matches require human review. Contact details are not shared automatically.',
               style: TextStyle(color: brandMuted, height: 1.5),
             ),
           ],
@@ -189,7 +173,7 @@ class _MatchScreenState extends State<MatchScreen> {
                       ),
                       SizedBox(width: 5),
                       Text(
-                        'PRIVATE · ON DEVICE',
+                        'REMOTE RECOGNITION',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -227,8 +211,8 @@ class _MatchScreenState extends State<MatchScreen> {
                     _HeroFact(icon: Icons.bolt_rounded, label: 'Fast scan'),
                     SizedBox(width: 9),
                     _HeroFact(
-                      icon: Icons.cloud_off_outlined,
-                      label: 'No upload',
+                      icon: Icons.cloud_outlined,
+                      label: 'Shared search',
                     ),
                   ],
                 ),
@@ -249,7 +233,7 @@ class _MatchScreenState extends State<MatchScreen> {
                   label: 'I’m looking for someone',
                   selected: _isLooking,
                   onTap: () {
-                    setState(() => _intent = _UploadIntent.looking);
+                    setState(() => _caseType = CaseType.missing);
                   },
                 ),
               ),
@@ -260,7 +244,7 @@ class _MatchScreenState extends State<MatchScreen> {
                   label: 'I found someone',
                   selected: !_isLooking,
                   onTap: () {
-                    setState(() => _intent = _UploadIntent.found);
+                    setState(() => _caseType = CaseType.found);
                   },
                 ),
               ),
@@ -339,26 +323,15 @@ class _MatchScreenState extends State<MatchScreen> {
             label: 'Choose from Gallery',
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: state.matching
-                      ? null
-                      : () => _pick(context, ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt_outlined, size: 19),
-                  label: const Text('Take a photo'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: state.loading ? null : () => _tryMatch(context),
-                  icon: const Icon(Icons.play_circle_outline_rounded, size: 19),
-                  label: const Text('Preview match'),
-                ),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: state.matching
+                  ? null
+                  : () => _pick(context, ImageSource.camera),
+              icon: const Icon(Icons.camera_alt_outlined, size: 19),
+              label: const Text('Take a photo'),
+            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -371,80 +344,19 @@ class _MatchScreenState extends State<MatchScreen> {
               Expanded(
                 child: _BenefitCard(
                   icon: Icons.shield_outlined,
-                  title: 'Private',
-                  description: 'Photos stay on your device',
+                  title: 'Controlled',
+                  description: 'No automatic contact sharing',
                 ),
               ),
               SizedBox(width: 10),
               Expanded(
                 child: _BenefitCard(
                   icon: Icons.auto_awesome_outlined,
-                  title: 'Simple',
-                  description: 'One tap to compare',
+                  title: 'Shared',
+                  description: 'Searches the opposite repository',
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
-            decoration: BoxDecoration(
-              color: brandLavender,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE3DFFF)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.science_outlined,
-                    color: brandPurple,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Try the other result',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Preview the no-match experience',
-                        style: TextStyle(color: brandMuted, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Preview no match',
-                  onPressed: state.loading
-                      ? null
-                      : () => _openActiveUpload(
-                            context,
-                            buildUnknownDemo(),
-                            'demo-no-match.jpg',
-                          ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: brandPurple,
-                  ),
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                ),
-              ],
-            ),
           ),
         ],
       ),
