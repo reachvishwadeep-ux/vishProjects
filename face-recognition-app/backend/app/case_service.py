@@ -85,46 +85,13 @@ def search_opposite_cases(
     embedding: np.ndarray,
     top_k: int,
 ) -> CaseSearchResult:
-    target_type = opposite_case_type(CaseType(case.case_type))
-    engine = get_engine()
     store = get_store()
-
-    rows = db.execute(
-        text(
-            """
-            SELECT cf.id AS face_id, cf.case_id, c.subject_label, cf.image_key,
-                   1 - (cf.embedding <=> CAST(:query AS vector)) AS score
-            FROM case_face cf
-            JOIN case_record c ON c.id = cf.case_id
-            WHERE cf.model_tag = :model_tag
-              AND cf.case_type = :target_type
-              AND c.status = 'active'
-            ORDER BY cf.embedding <=> CAST(:query AS vector)
-            LIMIT :limit
-            """
-        ),
-        {
-            "query": _to_vector_literal(embedding),
-            "model_tag": engine.model_tag,
-            "target_type": target_type.value,
-            "limit": top_k * 5,
-        },
-    ).mappings()
-
-    best_by_case: dict[uuid.UUID, CaseHit] = {}
-    for row in rows:
-        hit = CaseHit(
-            case_id=row["case_id"],
-            face_id=row["face_id"],
-            subject_label=row["subject_label"],
-            image_key=row["image_key"],
-            score=float(row["score"]),
-        )
-        existing = best_by_case.get(hit.case_id)
-        if existing is None or hit.score > existing.score:
-            best_by_case[hit.case_id] = hit
-
-    hits = sorted(best_by_case.values(), key=lambda item: item.score, reverse=True)[:top_k]
+    hits = find_opposite_case_hits(
+        db,
+        case_type=CaseType(case.case_type),
+        embedding=embedding,
+        top_k=top_k,
+    )
     decision = decide_case_match(hits[0].score if hits else None)
     _persist_candidates(db, case=case, face=face, hits=hits)
     review_threshold = get_settings().review_threshold
@@ -143,6 +110,62 @@ def search_opposite_cases(
             for hit in reviewable_hits
         ],
     )
+
+
+def find_opposite_case_hits(
+    db: Session,
+    *,
+    case_type: CaseType,
+    embedding: np.ndarray,
+    top_k: int,
+) -> list[CaseHit]:
+    target_type = opposite_case_type(case_type)
+    rows = db.execute(
+        text(
+            """
+            SELECT cf.id AS face_id, cf.case_id, c.subject_label, cf.image_key,
+                   1 - (cf.embedding <=> CAST(:query AS vector)) AS score
+            FROM case_face cf
+            JOIN case_record c ON c.id = cf.case_id
+            WHERE cf.model_tag = :model_tag
+              AND cf.case_type = :target_type
+              AND c.status = 'active'
+            ORDER BY cf.embedding <=> CAST(:query AS vector)
+            LIMIT :limit
+            """
+        ),
+        {
+            "query": _to_vector_literal(embedding),
+            "model_tag": get_engine().model_tag,
+            "target_type": target_type.value,
+            "limit": top_k * 5,
+        },
+    ).mappings()
+
+    best_by_case: dict[uuid.UUID, CaseHit] = {}
+    for row in rows:
+        hit = CaseHit(
+            case_id=row["case_id"],
+            face_id=row["face_id"],
+            subject_label=row["subject_label"],
+            image_key=row["image_key"],
+            score=float(row["score"]),
+        )
+        existing = best_by_case.get(hit.case_id)
+        if existing is None or hit.score > existing.score:
+            best_by_case[hit.case_id] = hit
+
+    return sorted(best_by_case.values(), key=lambda item: item.score, reverse=True)[:top_k]
+
+
+def persist_case_hits(
+    db: Session,
+    *,
+    case: CaseRecord,
+    face: CaseFace,
+    hits: list[CaseHit],
+) -> None:
+    _persist_candidates(db, case=case, face=face, hits=hits)
 
 
 def list_case_matches(db: Session, case: CaseRecord) -> CaseMatchesResponse:

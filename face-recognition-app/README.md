@@ -52,6 +52,14 @@ curl -F image=@found.jpg -F case_type=found     localhost:8000/v1/cases
 curl localhost:8000/v1/cases/<case-id>/matches
 ```
 
+Matching runs immediately for every upload. A restart-safe reconciliation sweep also
+runs every 15 minutes: it processes only case faces added since its durable watermark,
+searches their opposite repository, and updates candidate links for both the new and
+previously uploaded cases. Existing candidate rows are updated idempotently rather than
+duplicated. Configure it with `RECONCILIATION_ENABLED`,
+`RECONCILIATION_INTERVAL_SECONDS`, `RECONCILIATION_BATCH_SIZE`, and
+`RECONCILIATION_TOP_K`.
+
 Bulk-ingest an existing repository (`repository/<person_name>/*.jpg`):
 
 ```bash

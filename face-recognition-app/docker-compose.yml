@@ -48,6 +48,7 @@ services:
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: faces
       INSIGHTFACE_ROOT: /models
+      RECONCILIATION_INTERVAL_SECONDS: 900
     ports:
       - "8000:8000"
     volumes:

@@ -86,3 +86,10 @@ CREATE TABLE IF NOT EXISTS case_match (
 
 CREATE INDEX IF NOT EXISTS case_match_missing_idx ON case_match (missing_case_id);
 CREATE INDEX IF NOT EXISTS case_match_found_idx ON case_match (found_case_id);
+
+CREATE TABLE IF NOT EXISTS case_reconciliation_state (
+    name                 text PRIMARY KEY,
+    last_face_created_at timestamptz,
+    last_face_id         uuid,
+    updated_at           timestamptz NOT NULL DEFAULT now()
+);

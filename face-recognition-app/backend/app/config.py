@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Calibrate on your own data with scripts/evaluate.py before trusting these.
     match_threshold: float = 0.42
     review_threshold: float = 0.32
+    reconciliation_enabled: bool = True
+    reconciliation_interval_seconds: int = 900
+    reconciliation_batch_size: int = 100
+    reconciliation_top_k: int = 20
 
     # Enrolment quality gates.
     min_face_pixels: int = 112

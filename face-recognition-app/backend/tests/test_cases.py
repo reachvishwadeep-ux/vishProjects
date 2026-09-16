@@ -1,15 +1,18 @@
+import asyncio
 import uuid
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import cv2
 import numpy as np
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app import case_service
-from app import storage
+from app import case_service, reconciliation, storage
 from app.db import get_db
 from app.face_engine import DetectedFace
+from app.models import CaseReconciliationState
 from app.routers import cases
 from app.schemas import (
     CaseCandidate,
@@ -177,3 +180,124 @@ def test_submission_rejects_multiple_faces(monkeypatch) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"].startswith("multiple faces detected")
+
+
+def test_reconciliation_processes_new_faces_and_advances_the_cursor(
+    monkeypatch,
+) -> None:
+    first_created_at = datetime.now(UTC)
+    first_face = SimpleNamespace(
+        id=uuid.uuid4(),
+        created_at=first_created_at,
+        embedding=np.ones(512, dtype=np.float32),
+        case=SimpleNamespace(case_type="missing"),
+    )
+    second_face = SimpleNamespace(
+        id=uuid.uuid4(),
+        created_at=first_created_at + timedelta(seconds=1),
+        embedding=np.ones(512, dtype=np.float32),
+        case=SimpleNamespace(case_type="found"),
+    )
+    state_holder: dict[str, CaseReconciliationState | None] = {"state": None}
+    commits: list[None] = []
+
+    class FakeDb:
+        def get(
+            self,
+            model: type[CaseReconciliationState],
+            name: str,
+        ) -> CaseReconciliationState | None:
+            assert model is CaseReconciliationState
+            assert name == "case-matching"
+            return state_holder["state"]
+
+        def add(self, value: CaseReconciliationState) -> None:
+            if isinstance(value, CaseReconciliationState):
+                state_holder["state"] = value
+
+        def commit(self) -> None:
+            commits.append(None)
+
+    batches = iter([[first_face, second_face], []])
+    searched_case_types: list[CaseType] = []
+    persisted_face_ids: list[uuid.UUID] = []
+    monkeypatch.setattr(
+        reconciliation,
+        "get_settings",
+        lambda: SimpleNamespace(reconciliation_top_k=12),
+    )
+    monkeypatch.setattr(
+        reconciliation,
+        "_pending_faces",
+        lambda db, state: next(batches),
+    )
+
+    def fake_find(
+        db: object,
+        *,
+        case_type: CaseType,
+        embedding: np.ndarray,
+        top_k: int,
+    ) -> list[case_service.CaseHit]:
+        searched_case_types.append(case_type)
+        assert embedding.shape == (512,)
+        assert top_k == 12
+        return []
+
+    def fake_persist(
+        db: object,
+        *,
+        case: object,
+        face: object,
+        hits: list[case_service.CaseHit],
+    ) -> None:
+        persisted_face_ids.append(face.id)
+        assert hits == []
+
+    monkeypatch.setattr(reconciliation, "find_opposite_case_hits", fake_find)
+    monkeypatch.setattr(reconciliation, "persist_case_hits", fake_persist)
+
+    processed = reconciliation.reconcile_pending_case_faces(FakeDb())
+
+    assert processed == 2
+    assert searched_case_types == [CaseType.missing, CaseType.found]
+    assert persisted_face_ids == [first_face.id, second_face.id]
+    assert state_holder["state"] is not None
+    assert state_holder["state"].last_face_created_at == second_face.created_at
+    assert state_holder["state"].last_face_id == second_face.id
+    assert len(commits) == 3
+
+
+def test_reconciliation_loop_runs_immediately_then_waits_15_minutes(
+    monkeypatch,
+) -> None:
+    runs: list[None] = []
+    intervals: list[int] = []
+
+    def fake_run() -> int:
+        runs.append(None)
+        return 0
+
+    async def fake_to_thread(function: object) -> int:
+        return function()
+
+    async def fake_sleep(seconds: int) -> None:
+        intervals.append(seconds)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(
+        reconciliation,
+        "get_settings",
+        lambda: SimpleNamespace(
+            reconciliation_interval_seconds=900,
+        ),
+    )
+    monkeypatch.setattr(reconciliation, "run_reconciliation_once", fake_run)
+    monkeypatch.setattr(reconciliation.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(reconciliation.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(reconciliation.reconciliation_loop())
+
+    assert len(runs) == 1
+    assert intervals == [900]
