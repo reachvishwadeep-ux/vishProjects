@@ -5,29 +5,7 @@ from dotenv import load_dotenv
 # -----------------------------------
 # OpenAI Client
 # -----------------------------------
-load_dotenv()
-client = OpenAI()
-    
-
-# -----------------------------------
-# Sample Document
-# -----------------------------------
-
-text = """
-Artificial intelligence is transforming software engineering.
-Large language models can generate code, summarize text,
-and automate workflows.
-
-Vector databases are used to store embeddings for semantic search.
-Embeddings convert text into numerical vectors.
-
-AWS provides cloud infrastructure for scalable AI systems.
-DevOps teams use Kubernetes and Terraform for automation.
-
-Monitoring and observability are critical for production AI systems.
-Logging, tracing, and metrics help detect failures quickly.
-"""
-
+client = None
 # -----------------------------------
 # Chunking Function
 # chunk_size = 500
@@ -52,13 +30,13 @@ def chunk_text(text, chunk_size=500, overlap=100):
 
     return chunks
 
-chunks = chunk_text(text)
 
-print("\n--- CHUNKS ---")
+def _get_client():
+    global client
+    if client is None:
+        client = OpenAI()
+    return client
 
-for i, chunk in enumerate(chunks):
-    print(f"\nChunk {i}")
-    print(chunk)
 
 # -----------------------------------
 # Generate Embeddings
@@ -66,14 +44,13 @@ for i, chunk in enumerate(chunks):
 
 def get_embeddings(text_chunks):
 
-    response = client.embeddings.create(
+    response = _get_client().embeddings.create(
         model="text-embedding-3-small",
         input=text_chunks
     )
 
     return [item.embedding for item in response.data]
 
-embeddings = get_embeddings(chunks)
 
 # -----------------------------------
 # Store Vector Index In Memory
@@ -81,12 +58,6 @@ embeddings = get_embeddings(chunks)
 
 vector_store = []
 
-for i, chunk in enumerate(chunks):
-
-    vector_store.append({
-        "text": chunk,
-        "embedding": embeddings[i]
-    })
 
 # -----------------------------------
 # Semantic Search Function
@@ -95,7 +66,7 @@ for i, chunk in enumerate(chunks):
 def semantic_search(query, top_k=3):
 
     # Create query embedding
-    response = client.embeddings.create(
+    response = _get_client().embeddings.create(
         model="text-embedding-3-small",
         input=[query]
     )
@@ -126,17 +97,52 @@ def semantic_search(query, top_k=3):
 
     return results[:top_k]
 
-# -----------------------------------
-# Example Query
-# -----------------------------------
 
-query = "How do embeddings help semantic search?"
+def _run_demo():
+    load_dotenv()
+    # -----------------------------------
+    # Sample Document
+    # -----------------------------------
+    text = """
+Artificial intelligence is transforming software engineering.
+Large language models can generate code, summarize text,
+and automate workflows.
 
-results = semantic_search(query)
+Vector databases are used to store embeddings for semantic search.
+Embeddings convert text into numerical vectors.
 
-print("\n--- SEARCH RESULTS ---")
+AWS provides cloud infrastructure for scalable AI systems.
+DevOps teams use Kubernetes and Terraform for automation.
 
-for r in results:
+Monitoring and observability are critical for production AI systems.
+Logging, tracing, and metrics help detect failures quickly.
+"""
+    chunks = chunk_text(text)
+    print("\n--- CHUNKS ---")
+    for i, chunk in enumerate(chunks):
+        print(f"\nChunk {i}")
+        print(chunk)
 
-    print("\nScore:", round(r["score"], 4))
-    print(r["text"])
+    embeddings = get_embeddings(chunks)
+
+    for i, chunk in enumerate(chunks):
+        vector_store.append({
+            "text": chunk,
+            "embedding": embeddings[i]
+        })
+
+    # -----------------------------------
+    # Example Query
+    # -----------------------------------
+    query = "How do embeddings help semantic search?"
+    results = semantic_search(query)
+
+    print("\n--- SEARCH RESULTS ---")
+
+    for r in results:
+        print("\nScore:", round(r["score"], 4))
+        print(r["text"])
+
+
+if __name__ == "__main__":
+    _run_demo()

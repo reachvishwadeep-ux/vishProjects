@@ -64,21 +64,33 @@ def extract_pdf_for_embeddings(pdf_path: str):
 
     return records
 
-records = extract_pdf_for_embeddings(PDF_PATH)
-
-for r in records[:3]:
-    print(r)
-
 from openai import OpenAI
 
-client = OpenAI()
+client = None
+
+def _get_client():
+    global client
+    if client is None:
+        client = OpenAI()
+    return client
 
 def create_embedding(text: str):
-    response = client.embeddings.create(
+    response = _get_client().embeddings.create(
         model="text-embedding-3-small",
         input=text
     )
     return response.data[0].embedding
 
-for record in records:
-    record["embedding"] = create_embedding(record["content"])
+records = []
+
+def _run_demo():
+    global records
+    records = extract_pdf_for_embeddings(PDF_PATH)
+    for record in records[:3]:
+        print(record)
+    for record in records:
+        record["embedding"] = create_embedding(record["content"])
+
+
+if __name__ == "__main__":
+    _run_demo()
