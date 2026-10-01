@@ -31,12 +31,18 @@ vector_store = QdrantVectorStore(
 
 import bs4
 import requests
+from urllib.parse import urlparse
 from langchain_core.documents import Document
+
+REQUEST_TIMEOUT_SECONDS = 30
 
 
 # Below is a minimal helper for demonstration purposes.
 def load_web_page(url: str, bs_kwargs: dict | None = None) -> list[Document]:
-    response = requests.get(url)
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError(f"Refusing to load non-http(s) url: {url}")
+    response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     soup = bs4.BeautifulSoup(response.text, "html.parser", **(bs_kwargs or {}))
     return [Document(page_content=soup.get_text(), metadata={"source": url})]

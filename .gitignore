@@ -1,5 +1,11 @@
 #.env file
 .env
+.env.*
+
+# OpenTelemetry / Copilot telemetry exports (contain prompt, tool and terminal content)
+traces-export.json
+traces-export*.json
+*.otlp.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
