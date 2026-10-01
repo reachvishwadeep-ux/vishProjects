@@ -1,9 +1,14 @@
 #pip install pymupdf langchain-text-splitters openai
 
-# pip install pymupdf langchain-text-splitters openai
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import fitz  # PyMuPDF
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from common.openai_utils import embed_text
 
 PDF_PATH = "my_document.pdf"
 
@@ -69,16 +74,5 @@ records = extract_pdf_for_embeddings(PDF_PATH)
 for r in records[:3]:
     print(r)
 
-from openai import OpenAI
-
-client = OpenAI()
-
-def create_embedding(text: str):
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text
-    )
-    return response.data[0].embedding
-
 for record in records:
-    record["embedding"] = create_embedding(record["content"])
+    record["embedding"] = embed_text(record["content"])

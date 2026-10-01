@@ -1,23 +1,15 @@
 # this file makes a simple connection to openai api using the openai python library. it is used to test the connection and to get a response from the api.  
-import os
-import getpass
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from langchain_openai import OpenAI
 
+from common.env import require_env
 
-load_dotenv()
-if("OPENAI_API_KEY" not in os.environ):
-    os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter OPENAI API Key")
-else:
-    OPEN_AI_API_KEY = os.getenv("OPENAI_API_KEY")
-
+require_env("OPENAI_API_KEY", "Enter OPENAI API Key")
 
 llm = OpenAI()
 response = llm.invoke("What is the capital of France?")
 print(response)
-
-
-
-
-
-

@@ -1,9 +1,14 @@
-import os
-import dotenv
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from langchain.chat_models import init_chat_model
 from langchain_openai import OpenAIEmbeddings
-from dotenv import load_dotenv
-load_dotenv()
+
+from common.env import load_env
+
+load_env()
 
 
 model = init_chat_model("gpt-5.4")

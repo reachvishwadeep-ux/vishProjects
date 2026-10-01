@@ -1,10 +1,17 @@
-from langchain_core.documents import Document
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-from langchain_classic.retrievers import EnsembleRetriever
-from dotenv import load_dotenv
-load_dotenv()
+
+from common.env import load_env
+
+load_env()
 
 # 1. Sample documents
 docs = [

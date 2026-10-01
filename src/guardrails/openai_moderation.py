@@ -1,8 +1,11 @@
-from openai import OpenAI
-from dotenv import load_dotenv
-load_dotenv()
+import sys
+from pathlib import Path
 
-client = OpenAI()
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.openai_utils import get_openai_client
+
+client = get_openai_client()
 
 response = client.moderations.create(
     model="omni-moderation-latest",
