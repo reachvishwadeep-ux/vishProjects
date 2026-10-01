@@ -47,7 +47,8 @@ try:
     print(app.get_graph().draw_ascii())
     Image(app.get_graph().draw_mermaid_png())
     
-except ImportError:
+except Exception as e:
+    print(f"Graph visualization unavailable: {e}")
     print(app.get_graph())
 
 #5. add financial guardrails

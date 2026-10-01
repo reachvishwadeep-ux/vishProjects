@@ -1,5 +1,5 @@
-import os
 import json
+import sys
 from dotenv import load_dotenv
 import openai
 
@@ -30,6 +30,7 @@ review_text_neutral = "It’s okay I guess. Does the job but nothing special. " 
 "The price feels a bit high for what you get."
 
 llm = openai.OpenAI()
+failures = 0
 for review_text in [review_text_positive, review_text_negative, 
                     review_text_neutral]:
     prompt = prompt_template.format(review_text=review_text)
@@ -37,13 +38,21 @@ for review_text in [review_text_positive, review_text_negative,
         model="gpt-3.5-turbo",
         messages=[{"role":"user","content":prompt}])
     
-    json_response = response.choices[0].message.content
-    print(json_response)
+    raw_response = response.choices[0].message.content
+    print(raw_response)
     try:
+        if not isinstance(raw_response, str) or not raw_response.strip():
+            raise ValueError("model returned an empty completion")
+
+        start = raw_response.find("{")
+        end = raw_response.rfind("}")
+        if start == -1 or end == -1 or start > end:
+            raise ValueError("response did not contain a JSON object")
+
+        json_response = raw_response[start:end + 1]
+
         #json_response = "some prefix text " + json_response + " some suffix text"
         #revoew peamble and postamble from the response
-        json_response = json_response[
-            json_response.find("{"):json_response.rfind("}")+1]
         
         #handle if response is Key:value format instead of JSON
         if ":" in json_response and "{" not in json_response:
@@ -62,8 +71,19 @@ for review_text in [review_text_positive, review_text_negative,
 
 
         data = json.loads(json_response)
+        print(data)
         #print(type(data))
         #print(json.dumps(data, indent=2))
     except json.JSONDecodeError as e:
         print("Error decoding JSON:", e)
+        print("Raw payload:", raw_response)
+        failures += 1
+    except ValueError as e:
+        print("Error processing review response:", e)
+        print("Raw payload:", raw_response)
+        failures += 1
+
+if failures:
+    print(f"{failures} review response(s) failed.")
+    sys.exit(1)
     

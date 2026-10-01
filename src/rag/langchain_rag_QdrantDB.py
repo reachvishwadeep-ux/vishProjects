@@ -1,5 +1,3 @@
-import os
-import dotenv
 from langchain.chat_models import init_chat_model
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
@@ -36,10 +34,13 @@ from langchain_core.documents import Document
 
 # Below is a minimal helper for demonstration purposes.
 def load_web_page(url: str, bs_kwargs: dict | None = None) -> list[Document]:
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     response.raise_for_status()
     soup = bs4.BeautifulSoup(response.text, "html.parser", **(bs_kwargs or {}))
-    return [Document(page_content=soup.get_text(), metadata={"source": url})]
+    page_content = soup.get_text()
+    if not page_content.strip():
+        raise ValueError(f"No content extracted from {url}")
+    return [Document(page_content=page_content, metadata={"source": url})]
 
 
 # Only keep post title, headers, and content from the full HTML.
@@ -49,7 +50,8 @@ docs = load_web_page(
     bs_kwargs={"parse_only": bs4_strainer},
 )
 
-assert len(docs) == 1
+if len(docs) != 1:
+    raise ValueError(f"Expected one document from the web page, got {len(docs)}")
 print(f"Total characters: {len(docs[0].page_content)}")
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -103,5 +105,3 @@ for event in agent.stream(
     stream_mode="values",
 ):
     event["messages"][-1].pretty_print()
-
-

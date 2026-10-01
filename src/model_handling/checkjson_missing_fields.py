@@ -1,4 +1,5 @@
 import json
+import sys
 
 my_json_response = """
 {
@@ -16,9 +17,11 @@ try:
         fields = data.keys()
         required_fields = ["sentiment", "rating_estimate","key_issues",
                            "would_recommend"]
-        for item in required_fields:
-            if item not in fields:
-                raise ValueError(f"missing required field: {item}")
+        missing_fields = [item for item in required_fields if item not in fields]
+        if missing_fields:
+            raise ValueError(
+                f"missing required fields: {', '.join(missing_fields)}"
+            )
     else:
         raise ValueError("Response is not a JSON Object")
     
@@ -27,3 +30,5 @@ try:
 
 except json.JSONDecodeError as e:
     print("Error decoding JSON:", e)
+    print("Raw payload:", my_json_response)
+    sys.exit(1)
