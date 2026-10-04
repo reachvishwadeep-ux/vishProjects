@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../auth/auth_controller.dart';
 import '../theme.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.auth});
+
+  final AuthController? auth;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +103,12 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const _PrototypePill(inverted: true),
+                _PrototypePill(
+                  inverted: true,
+                  label: auth?.authenticated == true
+                      ? 'PHONE VERIFIED'
+                      : 'VISUAL PROTOTYPE',
+                ),
               ],
             ),
           ),
@@ -110,26 +118,26 @@ class ProfileScreen extends StatelessWidget {
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(7),
+              padding: const EdgeInsets.all(7),
               child: Column(
                 children: [
-                  _ProfileSetting(
+                  const _ProfileSetting(
                     icon: Icons.mail_outline_rounded,
                     title: 'Email address',
-                    subtitle: 'Hidden until you approve sharing',
-                    value: 'Private',
+                    subtitle: 'Not required for your MatchSnap account',
+                    value: 'Off',
                   ),
-                  Divider(height: 1, indent: 54),
+                  const Divider(height: 1, indent: 54),
                   _ProfileSetting(
                     icon: Icons.phone_outlined,
                     title: 'Phone number',
-                    subtitle: 'Not provided',
-                    value: 'Off',
+                    subtitle: auth?.account?.phoneNumber ?? 'Not signed in',
+                    value: auth?.authenticated == true ? 'Verified' : 'Off',
                   ),
-                  Divider(height: 1, indent: 54),
-                  _ProfileSetting(
+                  const Divider(height: 1, indent: 54),
+                  const _ProfileSetting(
                     icon: Icons.notifications_outlined,
                     title: 'Match alerts',
                     subtitle: 'Planned for the online version',
@@ -140,6 +148,14 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          if (auth != null) ...[
+            OutlinedButton.icon(
+              onPressed: auth!.busy ? null : auth!.logout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Sign out'),
+            ),
+            const SizedBox(height: 16),
+          ],
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -189,9 +205,13 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _PrototypePill extends StatelessWidget {
-  const _PrototypePill({this.inverted = false});
+  const _PrototypePill({
+    this.inverted = false,
+    this.label = 'VISUAL PROTOTYPE',
+  });
 
   final bool inverted;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -205,7 +225,7 @@ class _PrototypePill extends StatelessWidget {
             : null,
       ),
       child: Text(
-        'VISUAL PROTOTYPE',
+        label,
         style: TextStyle(
           color: inverted ? Colors.white : brandPurple,
           fontSize: 11,

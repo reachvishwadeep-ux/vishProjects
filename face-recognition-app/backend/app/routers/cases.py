@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.auth import require_principal
 from app.case_service import create_case, delete_case, list_case_matches, search_opposite_cases
 from app.db import get_db
 from app.face_engine import get_engine
@@ -15,7 +16,11 @@ from app.schemas import (
     CaseType,
 )
 
-router = APIRouter(prefix="/v1/cases", tags=["cases"])
+router = APIRouter(
+    prefix="/v1/cases",
+    tags=["cases"],
+    dependencies=[Depends(require_principal)],
+)
 
 
 @router.post("", response_model=CaseSubmissionResponse, status_code=status.HTTP_201_CREATED)

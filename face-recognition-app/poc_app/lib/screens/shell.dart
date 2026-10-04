@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../auth/auth_controller.dart';
 import 'gallery_screen.dart';
 import 'match_screen.dart';
 import 'my_matches_screen.dart';
 import 'profile_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.state});
+  const AppShell({super.key, required this.state, this.auth});
 
   final AppState state;
+  final AuthController? auth;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -31,7 +33,7 @@ class _AppShellState extends State<AppShell> {
               MatchScreen(state: widget.state),
               const MyMatchesScreen(),
               GalleryScreen(state: widget.state),
-              const ProfileScreen(),
+              ProfileScreen(auth: widget.auth),
             ],
           ),
           bottomNavigationBar: SafeArea(

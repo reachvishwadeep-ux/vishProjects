@@ -88,3 +88,36 @@ class CaseOut(BaseModel):
 class CaseMatchesResponse(BaseModel):
     case_id: uuid.UUID
     results: list[CaseCandidate]
+
+
+class OtpRequest(BaseModel):
+    phone_number: str
+
+
+class OtpRequestResponse(BaseModel):
+    challenge_id: uuid.UUID
+    expires_in: int
+    development_code: str | None = None
+
+
+class OtpVerifyRequest(BaseModel):
+    challenge_id: uuid.UUID
+    phone_number: str
+    code: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class AccountOut(BaseModel):
+    id: uuid.UUID
+    phone_number: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    account: AccountOut

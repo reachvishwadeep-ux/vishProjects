@@ -49,6 +49,9 @@ services:
       S3_BUCKET: faces
       INSIGHTFACE_ROOT: /models
       RECONCILIATION_INTERVAL_SECONDS: 900
+      JWT_SECRET: ${JWT_SECRET:-local-demo-jwt-secret-change-before-sharing}
+      OTP_HASH_SECRET: ${OTP_HASH_SECRET:-local-demo-otp-secret-change-before-sharing}
+      OTP_DELIVERY_MODE: ${OTP_DELIVERY_MODE:-development}
     ports:
       - "8000:8000"
     volumes:

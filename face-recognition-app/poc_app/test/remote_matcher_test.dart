@@ -12,6 +12,7 @@ void main() {
     final client = MockClient((request) async {
       expect(request.url.toString(), 'https://api.example.com/v1/cases');
       expect(request.method, 'POST');
+      expect(request.headers['authorization'], 'Bearer access-token');
       expect(request.body, contains('name="case_type"'));
       expect(request.body, contains('found'));
       expect(request.body, contains('name="top_k"'));
@@ -50,6 +51,7 @@ void main() {
     final matcher = RemoteMatcher(
       baseUrl: 'https://api.example.com',
       client: client,
+      tokenProvider: () async => 'access-token',
     );
 
     final outcome = await matcher.match(

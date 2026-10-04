@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     reconciliation_batch_size: int = 100
     reconciliation_top_k: int = 20
 
+    jwt_secret: str = "dev-only-change-me"
+    jwt_issuer: str = "matchsnap"
+    access_token_ttl_seconds: int = 900
+    refresh_token_ttl_days: int = 30
+    otp_hash_secret: str = "dev-only-change-me"
+    otp_ttl_seconds: int = 300
+    otp_resend_cooldown_seconds: int = 60
+    otp_max_requests_per_hour: int = 5
+    otp_max_verification_attempts: int = 5
+    otp_delivery_mode: str = "development"
+
     # Enrolment quality gates.
     min_face_pixels: int = 112
     min_det_score: float = 0.70

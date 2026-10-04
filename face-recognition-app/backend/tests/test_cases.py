@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app import case_service, reconciliation, storage
+from app.auth import require_principal
 from app.db import get_db
 from app.face_engine import DetectedFace
 from app.models import CaseReconciliationState
@@ -70,6 +71,17 @@ def test_presigned_urls_use_the_public_object_store_endpoint(monkeypatch) -> Non
     url = storage.ObjectStore().presigned_url("cases/example/photo.jpg")
 
     assert url.startswith("http://10.0.2.2:9000/faces/cases/example/photo.jpg?")
+
+
+def test_case_submission_requires_authentication() -> None:
+    app = FastAPI()
+    app.include_router(cases.router)
+    app.dependency_overrides[get_db] = lambda: object()
+
+    response = TestClient(app).post("/v1/cases")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "valid authentication is required"
 
 
 def test_submission_contract_passes_missing_role_to_remote_case_service(
@@ -138,6 +150,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
     app = FastAPI()
     app.include_router(cases.router)
     app.dependency_overrides[get_db] = lambda: fake_db
+    app.dependency_overrides[require_principal] = lambda: object()
     monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
     monkeypatch.setattr(cases, "create_case", fake_create_case)
     monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
@@ -168,6 +181,7 @@ def test_submission_rejects_multiple_faces(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(cases.router)
     app.dependency_overrides[get_db] = lambda: fake_db
+    app.dependency_overrides[require_principal] = lambda: object()
     monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
 
     image = np.zeros((16, 16, 3), dtype=np.uint8)

@@ -11,10 +11,12 @@ class RemoteMatcher implements Matcher {
   RemoteMatcher({
     required this.baseUrl,
     http.Client? client,
+    this.tokenProvider,
   }) : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
+  final Future<String?> Function()? tokenProvider;
 
   @override
   String get name => 'ArcFace (remote service)';
@@ -42,6 +44,15 @@ class RemoteMatcher implements Matcher {
           filename: fileName,
         ),
       );
+    final accessToken = await tokenProvider?.call();
+    if (tokenProvider != null && accessToken == null) {
+      throw const RemoteRecognitionException(
+        'Sign in before submitting a photo.',
+      );
+    }
+    if (accessToken != null) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
 
     final streamed = await _client.send(request).timeout(
           const Duration(seconds: 120),

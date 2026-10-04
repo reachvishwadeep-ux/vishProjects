@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import require_principal
 from app.db import get_db
 from app.face_engine import get_engine
 from app.images import decode_image
@@ -12,7 +13,7 @@ from app.schemas import EnrollResponse, FaceOut, PersonOut, SearchResponse
 from app.service import enroll_face, get_or_create_person, search
 from app.storage import get_store
 
-router = APIRouter(prefix="/v1")
+router = APIRouter(prefix="/v1", dependencies=[Depends(require_principal)])
 
 
 @router.post("/enroll", response_model=EnrollResponse, status_code=status.HTTP_201_CREATED)
