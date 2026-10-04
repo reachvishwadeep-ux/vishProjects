@@ -22,6 +22,7 @@ void main() {
         matcher: RemoteMatcher(
           baseUrl: Config.apiBaseUrl,
           tokenProvider: authRepository.validAccessToken,
+          onAuthenticationFailure: auth.logout,
         ),
       ),
     ),

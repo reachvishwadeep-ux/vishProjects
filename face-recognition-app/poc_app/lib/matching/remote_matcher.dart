@@ -12,11 +12,13 @@ class RemoteMatcher implements Matcher {
     required this.baseUrl,
     http.Client? client,
     this.tokenProvider,
+    this.onAuthenticationFailure,
   }) : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
   final Future<String?> Function()? tokenProvider;
+  final Future<void> Function()? onAuthenticationFailure;
 
   @override
   String get name => 'ArcFace (remote service)';
@@ -61,6 +63,12 @@ class RemoteMatcher implements Matcher {
           ),
         );
     final response = await http.Response.fromStream(streamed);
+    if (response.statusCode == 401) {
+      await onAuthenticationFailure?.call();
+      throw const RemoteRecognitionException(
+        'Your session expired. Sign in again to continue.',
+      );
+    }
     if (response.statusCode != 201) {
       throw RemoteRecognitionException(_errorMessage(response));
     }

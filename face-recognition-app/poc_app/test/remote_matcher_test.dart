@@ -104,4 +104,38 @@ void main() {
       ),
     );
   });
+
+  test('clears authentication when the remote session is rejected', () async {
+    var authenticationFailureHandled = false;
+    final matcher = RemoteMatcher(
+      baseUrl: 'https://api.example.com',
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({'detail': 'valid authentication is required'}),
+          401,
+        ),
+      ),
+      tokenProvider: () async => 'revoked-access-token',
+      onAuthenticationFailure: () async {
+        authenticationFailureHandled = true;
+      },
+    );
+
+    await expectLater(
+      matcher.match(
+        probe: Uint8List.fromList([1, 2, 3]),
+        gallery: const [],
+        caseType: CaseType.found,
+        fileName: 'photo.jpg',
+      ),
+      throwsA(
+        isA<RemoteRecognitionException>().having(
+          (error) => error.message,
+          'message',
+          'Your session expired. Sign in again to continue.',
+        ),
+      ),
+    );
+    expect(authenticationFailureHandled, isTrue);
+  });
 }
