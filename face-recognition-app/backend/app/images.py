@@ -10,3 +10,17 @@ def decode_image(data: bytes) -> np.ndarray:
             status_code=status.HTTP_400_BAD_REQUEST, detail="could not decode image"
         )
     return image
+
+
+def encode_jpeg(image: np.ndarray) -> bytes:
+    success, encoded = cv2.imencode(
+        ".jpg",
+        image,
+        [int(cv2.IMWRITE_JPEG_QUALITY), 92],
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="could not normalize image",
+        )
+    return encoded.tobytes()

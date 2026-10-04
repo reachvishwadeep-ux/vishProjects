@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel
 
@@ -47,3 +49,75 @@ class PersonOut(BaseModel):
     display_name: str
     consent_ref: str | None
     faces: list[FaceOut]
+
+
+class CaseType(StrEnum):
+    missing = "missing"
+    found = "found"
+
+
+class CaseCandidate(BaseModel):
+    case_id: uuid.UUID
+    subject_label: str
+    score: float
+    image_url: str | None = None
+
+
+class CaseSearchResult(BaseModel):
+    decision: str
+    threshold: float
+    results: list[CaseCandidate]
+
+
+class CaseSubmissionResponse(BaseModel):
+    case_id: uuid.UUID
+    case_type: CaseType
+    subject_label: str
+    quality: QualityReport
+    match: CaseSearchResult
+
+
+class CaseOut(BaseModel):
+    id: uuid.UUID
+    case_type: CaseType
+    subject_label: str
+    status: str
+    created_at: datetime
+
+
+class CaseMatchesResponse(BaseModel):
+    case_id: uuid.UUID
+    results: list[CaseCandidate]
+
+
+class OtpRequest(BaseModel):
+    phone_number: str
+
+
+class OtpRequestResponse(BaseModel):
+    challenge_id: uuid.UUID
+    expires_in: int
+    development_code: str | None = None
+
+
+class OtpVerifyRequest(BaseModel):
+    challenge_id: uuid.UUID
+    phone_number: str
+    code: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class AccountOut(BaseModel):
+    id: uuid.UUID
+    phone_number: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    account: AccountOut

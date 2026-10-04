@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://facerec:facerec@localhost:5432/facerec"
 
     s3_endpoint_url: str = "http://localhost:9000"
+    s3_public_endpoint_url: str | None = None
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "faces"
@@ -23,6 +24,21 @@ class Settings(BaseSettings):
     # Calibrate on your own data with scripts/evaluate.py before trusting these.
     match_threshold: float = 0.42
     review_threshold: float = 0.32
+    reconciliation_enabled: bool = True
+    reconciliation_interval_seconds: int = 900
+    reconciliation_batch_size: int = 100
+    reconciliation_top_k: int = 20
+
+    jwt_secret: str = "dev-only-change-me"
+    jwt_issuer: str = "matchsnap"
+    access_token_ttl_seconds: int = 900
+    refresh_token_ttl_days: int = 30
+    otp_hash_secret: str = "dev-only-change-me"
+    otp_ttl_seconds: int = 300
+    otp_resend_cooldown_seconds: int = 60
+    otp_max_requests_per_hour: int = 5
+    otp_max_verification_attempts: int = 5
+    otp_delivery_mode: str = "development"
 
     # Enrolment quality gates.
     min_face_pixels: int = 112
