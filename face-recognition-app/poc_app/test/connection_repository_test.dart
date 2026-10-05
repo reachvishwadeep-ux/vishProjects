@@ -14,6 +14,9 @@ Map<String, Object?> _connection({
   bool unread = true,
   String status = 'pending_consent',
   String? meetingCode,
+  bool myVerifiedPeer = false,
+  bool otherVerifiedPeer = false,
+  String? meetingCodeExpiresAt,
 }) {
   return {
     'id': '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
@@ -26,12 +29,12 @@ Map<String, Object?> _connection({
     'image_url': null,
     'my_consented': myConsented,
     'other_consented': otherConsented,
-    'my_verified_peer': false,
-    'other_verified_peer': false,
+    'my_verified_peer': myVerifiedPeer,
+    'other_verified_peer': otherVerifiedPeer,
     'unread': unread,
     'meeting_code': meetingCode,
-    'meeting_code_expires_at':
-        meetingCode == null ? null : '2030-01-01T12:00:00Z',
+    'meeting_code_expires_at': meetingCodeExpiresAt ??
+        (meetingCode == null ? null : '2030-01-01T12:00:00Z'),
     'created_at': '2026-10-01T12:00:00Z',
   };
 }
@@ -136,5 +139,42 @@ void main() {
       find.textContaining('Meeting codes confirm account presence'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('peer code remains verifiable after own code is consumed',
+      (tester) async {
+    final repository = _repository(
+      MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'results': [
+              _connection(
+                myConsented: true,
+                otherConsented: true,
+                status: 'ready_to_meet',
+                otherVerifiedPeer: true,
+                meetingCodeExpiresAt: '2030-01-01T12:00:00Z',
+              ),
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: MyMatchesScreen(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('The other party verified your code'),
+      findsOneWidget,
+    );
+    expect(find.text('Other party’s code'), findsOneWidget);
+    expect(find.text('Verify other code'), findsOneWidget);
+    expect(find.text('Create new meeting codes'), findsNothing);
   });
 }

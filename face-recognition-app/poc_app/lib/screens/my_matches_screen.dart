@@ -522,7 +522,12 @@ class _MeetingCodePanel extends StatelessWidget {
       );
     }
     final code = connection.meetingCode;
-    if (code == null) {
+    final expiresAt = connection.meetingCodeExpiresAt;
+    final activeCodeWasConsumed = code == null &&
+        connection.otherVerifiedPeer &&
+        expiresAt != null &&
+        expiresAt.isAfter(DateTime.now());
+    if (code == null && !activeCodeWasConsumed) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -548,29 +553,38 @@ class _MeetingCodePanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'YOUR ONE-TIME CODE',
-            style: TextStyle(
-              color: brandPurple,
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .6,
+          if (code != null) ...[
+            const Text(
+              'YOUR ONE-TIME CODE',
+              style: TextStyle(
+                color: brandPurple,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .6,
+              ),
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            code,
-            style: const TextStyle(
-              color: brandInk,
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 7,
+            const SizedBox(height: 3),
+            Text(
+              code,
+              style: const TextStyle(
+                color: brandInk,
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 7,
+              ),
             ),
-          ),
-          Text(
-            _expiryText(connection.meetingCodeExpiresAt),
-            style: const TextStyle(color: brandMuted, fontSize: 10),
-          ),
+            Text(
+              _expiryText(expiresAt),
+              style: const TextStyle(color: brandMuted, fontSize: 10),
+            ),
+          ] else ...[
+            const _InlineNotice(
+              icon: Icons.verified_outlined,
+              text:
+                  'The other party verified your code. Enter their code to complete verification.',
+              success: true,
+            ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: codeController,
@@ -586,7 +600,7 @@ class _MeetingCodePanel extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton.tonalIcon(
-              onPressed: busy ? null : onVerify,
+              onPressed: busy || connection.myVerifiedPeer ? null : onVerify,
               icon: const Icon(Icons.key_rounded),
               label: Text(
                 connection.myVerifiedPeer

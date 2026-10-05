@@ -197,7 +197,6 @@ def test_each_party_verifies_the_other_partys_code_once(
         connection_id=connection.id,
         account=missing_account,
     )
-
     missing_verified = connection_service.verify_peer_meeting_code(
         db,
         connection_id=connection.id,
@@ -216,6 +215,44 @@ def test_each_party_verifies_the_other_partys_code_once(
     assert found_verified.my_verified_peer is True
     assert found_verified.other_verified_peer is True
     assert found_verified.meeting_code is None
+
+
+def test_replayed_meeting_code_is_rejected_and_audited(
+    connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
+) -> None:
+    db, missing_account, found_account, connection = connection_fixture
+    connection_service.consent_to_connection(
+        db,
+        connection_id=connection.id,
+        account=missing_account,
+    )
+    connection_service.consent_to_connection(
+        db,
+        connection_id=connection.id,
+        account=found_account,
+    )
+    missing_ready = connection_service.consent_to_connection(
+        db,
+        connection_id=connection.id,
+        account=missing_account,
+    )
+    connection_service.verify_peer_meeting_code(
+        db,
+        connection_id=connection.id,
+        account=found_account,
+        code=missing_ready.meeting_code or "",
+    )
+
+    with pytest.raises(HTTPException) as error:
+        connection_service.verify_peer_meeting_code(
+            db,
+            connection_id=connection.id,
+            account=found_account,
+            code=missing_ready.meeting_code or "",
+        )
+
+    assert error.value.status_code == 409
+    assert db.audit_events[-1].event_type == "meeting_code_replay_rejected"
 
 
 def test_incorrect_code_is_rejected_and_audited(

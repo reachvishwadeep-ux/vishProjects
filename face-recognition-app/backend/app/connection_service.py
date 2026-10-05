@@ -182,11 +182,21 @@ def verify_peer_meeting_code(
 
     if account.id == connection.missing_account_id:
         if connection.missing_verified_peer_at is not None:
-            return _connection_out(db, connection, account.id)
+            _audit(db, account, "meeting_code_replay_rejected", connection.id)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="meeting code was already verified",
+            )
         peer_account_id = connection.found_account_id
     else:
         if connection.found_verified_peer_at is not None:
-            return _connection_out(db, connection, account.id)
+            _audit(db, account, "meeting_code_replay_rejected", connection.id)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="meeting code was already verified",
+            )
         peer_account_id = connection.missing_account_id
 
     if not hmac.compare_digest(
