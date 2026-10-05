@@ -90,6 +90,38 @@ class CaseMatchesResponse(BaseModel):
     results: list[CaseCandidate]
 
 
+class ConnectionRole(StrEnum):
+    missing = "missing"
+    found = "found"
+
+
+class ConnectionOut(BaseModel):
+    id: uuid.UUID
+    role: ConnectionRole
+    status: str
+    my_case_id: uuid.UUID
+    other_case_id: uuid.UUID
+    other_subject_label: str
+    score: float
+    image_url: str | None = None
+    my_consented: bool
+    other_consented: bool
+    my_verified_peer: bool
+    other_verified_peer: bool
+    unread: bool
+    meeting_code: str | None = None
+    meeting_code_expires_at: datetime | None = None
+    created_at: datetime
+
+
+class ConnectionListResponse(BaseModel):
+    results: list[ConnectionOut]
+
+
+class MeetingCodeVerifyRequest(BaseModel):
+    code: str
+
+
 class OtpRequest(BaseModel):
     phone_number: str
 

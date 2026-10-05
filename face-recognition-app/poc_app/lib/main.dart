@@ -4,6 +4,7 @@ import 'app_state.dart';
 import 'auth/auth_controller.dart';
 import 'auth/auth_repository.dart';
 import 'config.dart';
+import 'connections/connection_repository.dart';
 import 'matching/remote_matcher.dart';
 import 'repository/gallery_repository.dart';
 import 'screens/phone_auth_screen.dart';
@@ -14,9 +15,15 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final authRepository = AuthRepository(baseUrl: Config.apiBaseUrl);
   final auth = AuthController(repository: authRepository);
+  final connections = ConnectionRepository(
+    baseUrl: Config.apiBaseUrl,
+    tokenProvider: authRepository.validAccessToken,
+    onAuthenticationFailure: auth.logout,
+  );
   runApp(
     PocApp(
       auth: auth,
+      connections: connections,
       state: AppState(
         repository: GalleryRepository(),
         matcher: RemoteMatcher(
@@ -30,10 +37,16 @@ void main() {
 }
 
 class PocApp extends StatefulWidget {
-  const PocApp({super.key, required this.state, this.auth});
+  const PocApp({
+    super.key,
+    required this.state,
+    this.auth,
+    this.connections,
+  });
 
   final AppState state;
   final AuthController? auth;
+  final ConnectionRepository? connections;
 
   @override
   State<PocApp> createState() => _PocAppState();
@@ -55,7 +68,7 @@ class _PocAppState extends State<PocApp> {
       theme: buildTheme(Brightness.light),
       themeMode: ThemeMode.light,
       home: widget.auth == null
-          ? AppShell(state: widget.state)
+          ? AppShell(state: widget.state, connections: widget.connections)
           : AnimatedBuilder(
               animation: widget.auth!,
               builder: (context, _) {
@@ -67,7 +80,11 @@ class _PocAppState extends State<PocApp> {
                 if (!widget.auth!.authenticated) {
                   return PhoneAuthScreen(controller: widget.auth!);
                 }
-                return AppShell(state: widget.state, auth: widget.auth);
+                return AppShell(
+                  state: widget.state,
+                  auth: widget.auth,
+                  connections: widget.connections,
+                );
               },
             ),
     );

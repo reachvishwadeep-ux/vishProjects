@@ -69,6 +69,12 @@ duplicated. Configure it with `RECONCILIATION_ENABLED`,
 `RECONCILIATION_INTERVAL_SECONDS`, `RECONCILIATION_BATCH_SIZE`, and
 `RECONCILIATION_TOP_K`.
 
+When a high-scoring missing/found pair belongs to two different accounts, the API
+creates a private in-app connection notification. Both accounts must consent before
+the server derives distinct six-digit meeting codes. Codes expire after 15 minutes,
+are never stored in plaintext, and are revoked if either party withdraws consent.
+Phone numbers and precise locations are not included in connection responses.
+
 Bulk-ingest an existing repository (`repository/<person_name>/*.jpg`):
 
 ```bash
@@ -87,8 +93,13 @@ docker compose exec api python -m scripts.ingest /data/repository
 | `POST /v1/enroll` | Add a photo. Fields: `image`, `person_name`, `consent_ref?`, `force?`. Rejects low-quality photos unless `force=true`. |
 | `POST /v1/search` | 1:N identification. Returns ranked matches with cosine scores and a `decision` of `match` / `review` / `no_match`. |
 | `POST /v1/cases` | Store a `missing` or `found` case and search only the opposite repository. |
-| `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for a case. |
-| `DELETE /v1/cases/{id}` | Delete a case, its embedding, stored photo, and candidate links. |
+| `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for an owned case. |
+| `DELETE /v1/cases/{id}` | Delete an owned case, its embedding, stored photo, and candidate links. |
+| `GET /v1/connections` | List the authenticated account's private match notifications and consent state. |
+| `POST /v1/connections/{id}/consent` | Consent to the connection; meeting codes activate after mutual consent. |
+| `POST /v1/connections/{id}/withdraw-consent` | Withdraw consent and immediately revoke active meeting codes. |
+| `POST /v1/connections/{id}/meeting-code/verify` | Verify the other participant's short-lived code once. |
+| `POST /v1/connections/{id}/meeting-code/renew` | Rotate expired or used meeting codes after mutual consent. |
 | `GET /v1/persons`, `GET /v1/persons/{id}` | Repository listing with presigned image URLs. |
 | `DELETE /v1/persons/{id}` | Purge a person's vectors and images (GDPR / BIPA erasure). |
 | `GET /health` | Liveness plus the active `model_tag`. |
@@ -137,6 +148,9 @@ a human instead of being asserted as matches.
   are returned only when `OTP_DELIVERY_MODE=development`; never use that mode on a
   public server. Add an SMS provider, HTTPS, upload rate limits, and stricter
   role/case authorization before production.
+- Face similarity and a successful meeting-code exchange do not prove identity,
+  guardianship, custody, intent, or a safe child handoff. They must never
+  automatically authorize a child transfer.
 
 ## Development
 

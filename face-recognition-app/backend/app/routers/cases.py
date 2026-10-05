@@ -1,14 +1,15 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import require_principal
+from app.auth import AuthPrincipal, require_principal
 from app.case_service import create_case, delete_case, list_case_matches, search_opposite_cases
 from app.db import get_db
 from app.face_engine import get_engine
 from app.images import decode_image, encode_jpeg
-from app.models import CaseRecord
+from app.models import CaseAccount, CaseRecord
 from app.schemas import (
     CaseMatchesResponse,
     CaseOut,
@@ -16,11 +17,7 @@ from app.schemas import (
     CaseType,
 )
 
-router = APIRouter(
-    prefix="/v1/cases",
-    tags=["cases"],
-    dependencies=[Depends(require_principal)],
-)
+router = APIRouter(prefix="/v1/cases", tags=["cases"])
 
 
 @router.post("", response_model=CaseSubmissionResponse, status_code=status.HTTP_201_CREATED)
@@ -31,6 +28,7 @@ def submit_case(
     top_k: int = Form(5),
     force: bool = Form(False),
     db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
 ) -> CaseSubmissionResponse:
     decoded = decode_image(image.file.read())
     detected_faces = get_engine().detect_all(decoded)
@@ -61,6 +59,7 @@ def submit_case(
         image_bytes=encode_jpeg(decoded),
         face=detected,
         content_type="image/jpeg",
+        account_id=principal.account.id,
     )
     match = search_opposite_cases(
         db,
@@ -79,8 +78,12 @@ def submit_case(
 
 
 @router.get("/{case_id}", response_model=CaseOut)
-def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> CaseOut:
-    case = _get_case(db, case_id)
+def get_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> CaseOut:
+    case = _get_owned_case(db, case_id, principal.account.id)
     return CaseOut(
         id=case.id,
         case_type=CaseType(case.case_type),
@@ -94,17 +97,36 @@ def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> CaseOut:
 def get_case_matches(
     case_id: uuid.UUID,
     db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
 ) -> CaseMatchesResponse:
-    return list_case_matches(db, _get_case(db, case_id))
+    return list_case_matches(
+        db,
+        _get_owned_case(db, case_id, principal.account.id),
+    )
 
 
 @router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    delete_case(db, _get_case(db, case_id))
+def remove_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> None:
+    delete_case(db, _get_owned_case(db, case_id, principal.account.id))
 
 
-def _get_case(db: Session, case_id: uuid.UUID) -> CaseRecord:
-    case = db.get(CaseRecord, case_id)
+def _get_owned_case(
+    db: Session,
+    case_id: uuid.UUID,
+    account_id: uuid.UUID,
+) -> CaseRecord:
+    case = db.scalar(
+        select(CaseRecord)
+        .join(CaseAccount, CaseAccount.case_id == CaseRecord.id)
+        .where(
+            CaseRecord.id == case_id,
+            CaseAccount.account_id == account_id,
+        )
+    )
     if case is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

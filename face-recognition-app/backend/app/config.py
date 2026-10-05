@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     otp_max_requests_per_hour: int = 5
     otp_max_verification_attempts: int = 5
     otp_delivery_mode: str = "development"
+    meeting_code_secret: str = "dev-only-change-me"
+    meeting_code_ttl_seconds: int = 900
 
     # Enrolment quality gates.
     min_face_pixels: int = 112

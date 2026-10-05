@@ -89,6 +89,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
 ) -> None:
     submitted_case_id = uuid.uuid4()
     candidate_case_id = uuid.uuid4()
+    authenticated_account_id = uuid.uuid4()
     captured_case_types: list[CaseType] = []
 
     class FakeEngine:
@@ -104,6 +105,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
         image_bytes: bytes,
         face: DetectedFace,
         content_type: str,
+        account_id: uuid.UUID,
     ) -> tuple[SimpleNamespace, SimpleNamespace]:
         captured_case_types.append(case_type)
         assert db is fake_db
@@ -111,6 +113,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
         assert image_bytes.startswith(b"\xff\xd8")
         assert face.det_score == 0.99
         assert content_type == "image/jpeg"
+        assert account_id == authenticated_account_id
         return (
             SimpleNamespace(
                 id=submitted_case_id,
@@ -150,7 +153,9 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
     app = FastAPI()
     app.include_router(cases.router)
     app.dependency_overrides[get_db] = lambda: fake_db
-    app.dependency_overrides[require_principal] = lambda: object()
+    app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
+        account=SimpleNamespace(id=authenticated_account_id)
+    )
     monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
     monkeypatch.setattr(cases, "create_case", fake_create_case)
     monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
