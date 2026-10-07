@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class QualityReport(BaseModel):
@@ -90,6 +90,38 @@ class CaseMatchesResponse(BaseModel):
     results: list[CaseCandidate]
 
 
+class ConnectionRole(StrEnum):
+    missing = "missing"
+    found = "found"
+
+
+class ConnectionOut(BaseModel):
+    id: uuid.UUID
+    role: ConnectionRole
+    status: str
+    my_case_id: uuid.UUID
+    other_case_id: uuid.UUID
+    other_subject_label: str
+    score: float
+    image_url: str | None = None
+    my_consented: bool
+    other_consented: bool
+    my_verified_peer: bool
+    other_verified_peer: bool
+    unread: bool
+    meeting_code: str | None = None
+    meeting_code_expires_at: datetime | None = None
+    created_at: datetime
+
+
+class ConnectionListResponse(BaseModel):
+    results: list[ConnectionOut]
+
+
+class MeetingCodeVerifyRequest(BaseModel):
+    code: str
+
+
 class OtpRequest(BaseModel):
     phone_number: str
 
@@ -121,3 +153,55 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     account: AccountOut
+
+
+class InstallationPlatform(StrEnum):
+    android = "android"
+    ios = "ios"
+
+
+class InstallationRequest(BaseModel):
+    installation_id: uuid.UUID
+    platform: InstallationPlatform
+    app_version: str = Field(min_length=1, max_length=32)
+    build_number: str = Field(min_length=1, max_length=32)
+
+
+class InstallationOut(BaseModel):
+    installation_id: uuid.UUID
+    account_id: uuid.UUID | None
+    account_phone: str | None
+    platform: InstallationPlatform
+    app_version: str
+    build_number: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    last_authenticated_at: datetime | None
+    is_active: bool
+
+
+class AuditEventOut(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    account_id: uuid.UUID | None
+    account_phone: str | None
+    event_data: dict[str, object]
+    created_at: datetime
+
+
+class AuditEventListResponse(BaseModel):
+    results: list[AuditEventOut]
+
+
+class InstallationListResponse(BaseModel):
+    results: list[InstallationOut]
+
+
+class AuditSummaryResponse(BaseModel):
+    installation_registrations: int
+    linked_installations: int
+    accounts: int
+    missing_uploads: int
+    found_uploads: int
+    confirmed_matches: int
+    risk_alerts: int

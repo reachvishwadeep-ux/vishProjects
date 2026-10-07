@@ -11,8 +11,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.connection_service import ensure_connection_for_match
 from app.face_engine import DetectedFace, get_engine
-from app.models import CaseFace, CaseMatch, CaseRecord
+from app.models import CaseAccount, CaseFace, CaseMatch, CaseRecord
 from app.schemas import CaseCandidate, CaseMatchesResponse, CaseSearchResult, CaseType
 from app.storage import get_store
 
@@ -47,6 +48,7 @@ def create_case(
     image_bytes: bytes,
     face: DetectedFace,
     content_type: str,
+    account_id: uuid.UUID,
 ) -> tuple[CaseRecord, CaseFace]:
     case = CaseRecord(
         case_type=case_type.value,
@@ -55,6 +57,7 @@ def create_case(
     )
     db.add(case)
     db.flush()
+    db.add(CaseAccount(case_id=case.id, account_id=account_id))
 
     store = get_store()
     key = f"cases/{case.id}/{uuid.uuid4()}.jpg"
@@ -93,7 +96,7 @@ def search_opposite_cases(
         top_k=top_k,
     )
     decision = decide_case_match(hits[0].score if hits else None)
-    _persist_candidates(db, case=case, face=face, hits=hits)
+    _persist_candidates(db, case=case, face=face, hits=hits, source="immediate")
     review_threshold = get_settings().review_threshold
     reviewable_hits = [hit for hit in hits if hit.score >= review_threshold]
 
@@ -165,7 +168,7 @@ def persist_case_hits(
     face: CaseFace,
     hits: list[CaseHit],
 ) -> None:
-    _persist_candidates(db, case=case, face=face, hits=hits)
+    _persist_candidates(db, case=case, face=face, hits=hits, source="reconciliation")
 
 
 def list_case_matches(db: Session, case: CaseRecord) -> CaseMatchesResponse:
@@ -213,8 +216,10 @@ def _persist_candidates(
     case: CaseRecord,
     face: CaseFace,
     hits: list[CaseHit],
+    source: str,
 ) -> None:
     settings = get_settings()
+    candidate_pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
     for hit in hits:
         if hit.score < settings.review_threshold:
             continue
@@ -250,6 +255,18 @@ def _persist_candidates(
             where=CaseMatch.score < hit.score,
         )
         db.execute(statement)
+        candidate_pairs.append((missing_case_id, found_case_id))
+    db.flush()
+    for missing_case_id, found_case_id in candidate_pairs:
+        match = db.scalar(
+            select(CaseMatch).where(
+                CaseMatch.missing_case_id == missing_case_id,
+                CaseMatch.found_case_id == found_case_id,
+                CaseMatch.model_tag == get_engine().model_tag,
+            )
+        )
+        if match is not None:
+            ensure_connection_for_match(db, match, source=source)
     db.commit()
 
 
