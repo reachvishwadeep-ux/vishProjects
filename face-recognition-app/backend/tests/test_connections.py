@@ -9,6 +9,8 @@ from app import connection_service
 from app.models import (
     Account,
     AccountNotification,
+    AuditEvent,
+    CaseAccount,
     CaseFace,
     CaseMatch,
     CaseRecord,
@@ -63,6 +65,11 @@ def connection_fixture(
         connection_service,
         "get_store",
         lambda: FakeStore(),
+    )
+    monkeypatch.setattr(
+        connection_service,
+        "record_repeated_failure_risk",
+        lambda *args, **kwargs: None,
     )
     missing_account = Account(
         id=uuid.uuid4(),
@@ -280,6 +287,62 @@ def test_incorrect_code_is_rejected_and_audited(
 
     assert error.value.status_code == 400
     assert db.audit_events[-1].event_type == "meeting_code_rejected"
+
+
+def test_new_match_audit_links_both_photos_and_matching_source() -> None:
+    missing_account_id = uuid.uuid4()
+    found_account_id = uuid.uuid4()
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=uuid.uuid4(),
+        found_case_id=uuid.uuid4(),
+        missing_face_id=uuid.uuid4(),
+        found_face_id=uuid.uuid4(),
+        score=0.84,
+        decision="match",
+        model_tag="buffalo_l",
+    )
+    connection_id = uuid.uuid4()
+
+    class MatchDb:
+        def __init__(self) -> None:
+            self.events: list[AuditEvent] = []
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is CaseAccount and object_id == match.missing_case_id:
+                return CaseAccount(
+                    case_id=match.missing_case_id,
+                    account_id=missing_account_id,
+                )
+            if model is CaseAccount and object_id == match.found_case_id:
+                return CaseAccount(
+                    case_id=match.found_case_id,
+                    account_id=found_account_id,
+                )
+            return None
+
+        def scalar(self, statement: object) -> uuid.UUID:
+            return connection_id
+
+        def execute(self, statement: object) -> None:
+            return None
+
+        def add(self, value: AuditEvent) -> None:
+            self.events.append(value)
+
+    db = MatchDb()
+
+    connection_service.ensure_connection_for_match(
+        db,
+        match,
+        source="reconciliation",
+    )
+
+    event = db.events[0]
+    assert event.event_type == "case_match_confirmed"
+    assert event.event_data["missing_face_id"] == str(match.missing_face_id)
+    assert event.event_data["found_face_id"] == str(match.found_face_id)
+    assert event.event_data["source"] == "reconciliation"
 
 
 def test_withdrawing_consent_revokes_meeting_codes(

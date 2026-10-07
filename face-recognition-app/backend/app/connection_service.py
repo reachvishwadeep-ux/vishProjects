@@ -10,6 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.audit_service import record_event, record_repeated_failure_risk, record_risk_alert
 from app.config import get_settings
 from app.models import (
     Account,
@@ -31,16 +32,30 @@ from app.storage import get_store
 MEETING_CODE_PATTERN = re.compile(r"^\d{6}$")
 
 
-def ensure_connection_for_match(db: Session, match: CaseMatch) -> None:
+def ensure_connection_for_match(
+    db: Session,
+    match: CaseMatch,
+    *,
+    source: str,
+) -> None:
     if match.decision != "match":
         return
     missing_owner = db.get(CaseAccount, match.missing_case_id)
     found_owner = db.get(CaseAccount, match.found_case_id)
-    if (
-        missing_owner is None
-        or found_owner is None
-        or missing_owner.account_id == found_owner.account_id
-    ):
+    if missing_owner is None or found_owner is None:
+        return
+    if missing_owner.account_id == found_owner.account_id:
+        record_risk_alert(
+            db,
+            risk_type="same_account_cross_role_match",
+            severity="high",
+            account_id=missing_owner.account_id,
+            data={
+                "match_id": str(match.id),
+                "missing_case_id": str(match.missing_case_id),
+                "found_case_id": str(match.found_case_id),
+            },
+        )
         return
 
     connection_id = db.scalar(
@@ -54,12 +69,30 @@ def ensure_connection_for_match(db: Session, match: CaseMatch) -> None:
         .on_conflict_do_nothing(index_elements=[MatchConnection.case_match_id])
         .returning(MatchConnection.id)
     )
+    connection_created = connection_id is not None
     if connection_id is None:
         connection_id = db.scalar(
             select(MatchConnection.id).where(MatchConnection.case_match_id == match.id)
         )
     if connection_id is None:
         return
+    if connection_created:
+        record_event(
+            db,
+            "case_match_confirmed",
+            data={
+                "match_id": str(match.id),
+                "connection_id": str(connection_id),
+                "missing_case_id": str(match.missing_case_id),
+                "found_case_id": str(match.found_case_id),
+                "missing_face_id": str(match.missing_face_id),
+                "found_face_id": str(match.found_face_id),
+                "score": match.score,
+                "decision": match.decision,
+                "model_tag": match.model_tag,
+                "source": source,
+            },
+        )
 
     for account_id in (missing_owner.account_id, found_owner.account_id):
         db.execute(
@@ -204,6 +237,13 @@ def verify_peer_meeting_code(
         _meeting_code(connection, peer_account_id),
     ):
         _audit(db, account, "meeting_code_rejected", connection.id)
+        record_repeated_failure_risk(
+            db,
+            account_id=account.id,
+            event_type="meeting_code_rejected",
+            risk_type="repeated_incorrect_meeting_codes",
+            data={"connection_id": str(connection.id)},
+        )
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -247,6 +287,21 @@ def _participant_connection(
         connection.missing_account_id,
         connection.found_account_id,
     ):
+        if connection is not None:
+            record_event(
+                db,
+                "connection_access_rejected",
+                account_id=account_id,
+                data={"connection_id": str(connection_id)},
+            )
+            record_repeated_failure_risk(
+                db,
+                account_id=account_id,
+                event_type="connection_access_rejected",
+                risk_type="repeated_unauthorized_connection_access",
+                data={"connection_id": str(connection_id)},
+            )
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="connection not found",

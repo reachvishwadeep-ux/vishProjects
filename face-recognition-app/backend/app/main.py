@@ -11,7 +11,7 @@ from app.db import engine
 from app.face_engine import get_engine
 from app.models import Base
 from app.reconciliation import reconciliation_loop, stop_reconciliation
-from app.routers import auth, cases, connections, faces
+from app.routers import audit, auth, cases, connections, faces
 from app.storage import get_store
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,7 @@ app.include_router(faces.router)
 app.include_router(cases.router)
 app.include_router(auth.router)
 app.include_router(connections.router)
+app.include_router(audit.router)
 
 
 @app.get("/health")

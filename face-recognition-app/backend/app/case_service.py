@@ -96,7 +96,7 @@ def search_opposite_cases(
         top_k=top_k,
     )
     decision = decide_case_match(hits[0].score if hits else None)
-    _persist_candidates(db, case=case, face=face, hits=hits)
+    _persist_candidates(db, case=case, face=face, hits=hits, source="immediate")
     review_threshold = get_settings().review_threshold
     reviewable_hits = [hit for hit in hits if hit.score >= review_threshold]
 
@@ -168,7 +168,7 @@ def persist_case_hits(
     face: CaseFace,
     hits: list[CaseHit],
 ) -> None:
-    _persist_candidates(db, case=case, face=face, hits=hits)
+    _persist_candidates(db, case=case, face=face, hits=hits, source="reconciliation")
 
 
 def list_case_matches(db: Session, case: CaseRecord) -> CaseMatchesResponse:
@@ -216,6 +216,7 @@ def _persist_candidates(
     case: CaseRecord,
     face: CaseFace,
     hits: list[CaseHit],
+    source: str,
 ) -> None:
     settings = get_settings()
     candidate_pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
@@ -265,7 +266,7 @@ def _persist_candidates(
             )
         )
         if match is not None:
-            ensure_connection_for_match(db, match)
+            ensure_connection_for_match(db, match, source=source)
     db.commit()
 
 

@@ -159,6 +159,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
     monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
     monkeypatch.setattr(cases, "create_case", fake_create_case)
     monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
+    monkeypatch.setattr(cases, "record_case_upload", lambda *args, **kwargs: None)
 
     image = np.zeros((16, 16, 3), dtype=np.uint8)
     _, encoded = cv2.imencode(".jpg", image)
@@ -186,8 +187,15 @@ def test_submission_rejects_multiple_faces(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(cases.router)
     app.dependency_overrides[get_db] = lambda: fake_db
-    app.dependency_overrides[require_principal] = lambda: object()
+    app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
+        account=SimpleNamespace(id=uuid.uuid4())
+    )
     monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
+    monkeypatch.setattr(
+        cases,
+        "_record_upload_rejection",
+        lambda *args, **kwargs: None,
+    )
 
     image = np.zeros((16, 16, 3), dtype=np.uint8)
     _, encoded = cv2.imencode(".jpg", image)

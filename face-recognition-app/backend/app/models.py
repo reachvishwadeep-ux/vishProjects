@@ -82,6 +82,28 @@ class AuditEvent(Base):
     )
 
 
+class AppInstallation(Base):
+    __tablename__ = "app_installation"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account.id", ondelete="SET NULL"),
+        index=True,
+    )
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    app_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    build_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    last_authenticated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class Person(Base):
     __tablename__ = "person"
 
