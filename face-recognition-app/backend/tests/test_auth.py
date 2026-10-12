@@ -27,6 +27,7 @@ def settings() -> SimpleNamespace:
         otp_max_requests_per_hour=5,
         otp_max_verification_attempts=5,
         otp_delivery_mode="development",
+        audit_failed_action_limit=3,
     )
 
 
@@ -144,3 +145,25 @@ def test_otp_is_single_use_and_resend_is_throttled(client: TestClient) -> None:
     }
     assert client.post("/v1/auth/otp/verify", json=payload).status_code == 200
     assert client.post("/v1/auth/otp/verify", json=payload).status_code == 400
+
+
+def test_repeated_otp_failures_create_a_risk_alert(client: TestClient) -> None:
+    requested = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+919876543210"},
+    )
+    challenge = requested.json()
+    payload = {
+        "challenge_id": challenge["challenge_id"],
+        "phone_number": "+919876543210",
+        "code": "000000",
+    }
+
+    assert client.post("/v1/auth/otp/verify", json=payload).status_code == 400
+    assert client.post("/v1/auth/otp/verify", json=payload).status_code == 400
+    assert client.post("/v1/auth/otp/verify", json=payload).status_code == 400
+
+    session = client.app.dependency_overrides[get_db]()
+    alerts = session.query(AuditEvent).filter_by(event_type="risk_alert").all()
+    assert len(alerts) == 1
+    assert alerts[0].event_data["risk_type"] == "repeated_otp_verification_failures"

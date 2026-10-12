@@ -13,6 +13,10 @@ void main() {
       expect(request.url.toString(), 'https://api.example.com/v1/cases');
       expect(request.method, 'POST');
       expect(request.headers['authorization'], 'Bearer access-token');
+      expect(
+        request.headers['x-installation-id'],
+        'f6bb3c98-6841-4ab4-93bb-8d9b80d8f4a3',
+      );
       expect(request.body, contains('name="case_type"'));
       expect(request.body, contains('found'));
       expect(request.body, contains('name="top_k"'));
@@ -52,6 +56,8 @@ void main() {
       baseUrl: 'https://api.example.com',
       client: client,
       tokenProvider: () async => 'access-token',
+      installationIdProvider: () async =>
+          'f6bb3c98-6841-4ab4-93bb-8d9b80d8f4a3',
     );
 
     final outcome = await matcher.match(

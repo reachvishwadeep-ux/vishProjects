@@ -12,7 +12,7 @@ class MemoryTokenStore implements TokenStore {
   final values = <String, String>{};
 
   @override
-  Future<void> deleteAll() async => values.clear();
+  Future<void> delete(String key) async => values.remove(key);
 
   @override
   Future<String?> read(String key) async => values[key];
@@ -93,6 +93,20 @@ void main() {
     expect(account?.phoneNumber, '+919876543210');
     expect(store.values.values, contains('refresh-two'));
     expect(store.values.values, isNot(contains('refresh-one')));
+  });
+
+  test('logout preserves the installation identifier', () async {
+    final store = MemoryTokenStore()
+      ..values['matchsnap_installation_id'] = 'installation-id';
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: store,
+      client: MockClient((request) async => http.Response('{}', 204)),
+    );
+
+    await repository.clear();
+
+    expect(store.values['matchsnap_installation_id'], 'installation-id');
   });
 
   testWidgets('phone screen completes the development OTP flow',

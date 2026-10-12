@@ -82,6 +82,28 @@ class AuditEvent(Base):
     )
 
 
+class AppInstallation(Base):
+    __tablename__ = "app_installation"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account.id", ondelete="SET NULL"),
+        index=True,
+    )
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    app_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    build_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    last_authenticated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class Person(Base):
     __tablename__ = "person"
 
@@ -135,6 +157,23 @@ class CaseRecord(Base):
     faces: Mapped[list["CaseFace"]] = relationship(
         back_populates="case", cascade="all, delete-orphan"
     )
+
+
+class CaseAccount(Base):
+    __tablename__ = "case_account"
+
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("case_record.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CaseFace(Base):
@@ -195,6 +234,74 @@ class CaseMatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MatchConnection(Base):
+    __tablename__ = "match_connection"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    case_match_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("case_match.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    missing_account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    found_account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending_consent", index=True
+    )
+    missing_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    found_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    meeting_nonce: Mapped[str | None] = mapped_column(String(64))
+    meeting_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    missing_verified_peer_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    found_verified_peer_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AccountNotification(Base):
+    __tablename__ = "account_notification"
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "connection_id",
+            "event_type",
+            name="account_notification_event_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("account.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    connection_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("match_connection.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
 
 

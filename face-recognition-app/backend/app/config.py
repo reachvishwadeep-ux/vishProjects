@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     otp_max_requests_per_hour: int = 5
     otp_max_verification_attempts: int = 5
     otp_delivery_mode: str = "development"
+    meeting_code_secret: str = "dev-only-change-me"
+    meeting_code_ttl_seconds: int = 900
+    audit_admin_key: str = "dev-only-change-me"
+    audit_upload_burst_limit: int = 5
+    audit_failed_action_limit: int = 3
+    audit_max_installations_per_account: int = 3
+    audit_retention_days: int = 365
+    audit_installation_inactivity_days: int = 365
 
     # Enrolment quality gates.
     min_face_pixels: int = 112

@@ -26,7 +26,7 @@ class AccountSession {
 abstract class TokenStore {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
-  Future<void> deleteAll();
+  Future<void> delete(String key);
 }
 
 class SecureTokenStore implements TokenStore {
@@ -43,7 +43,7 @@ class SecureTokenStore implements TokenStore {
       _storage.write(key: key, value: value);
 
   @override
-  Future<void> deleteAll() => _storage.deleteAll();
+  Future<void> delete(String key) => _storage.delete(key: key);
 }
 
 class AuthRepository {
@@ -154,7 +154,8 @@ class AuthRepository {
     _accessToken = null;
     _accessTokenExpiresAt = null;
     _account = null;
-    await _tokenStore.deleteAll();
+    await _tokenStore.delete(_refreshTokenKey);
+    await _tokenStore.delete(_phoneNumberKey);
   }
 
   Future<AccountSession> _refresh(String refreshToken) async {

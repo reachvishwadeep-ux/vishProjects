@@ -1,14 +1,29 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    UploadFile,
+    status,
+)
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import require_principal
+from app.audit_service import (
+    record_case_upload,
+    record_event,
+    record_repeated_failure_risk,
+)
+from app.auth import AuthPrincipal, require_principal
 from app.case_service import create_case, delete_case, list_case_matches, search_opposite_cases
 from app.db import get_db
 from app.face_engine import get_engine
 from app.images import decode_image, encode_jpeg
-from app.models import CaseRecord
+from app.models import CaseAccount, CaseRecord
 from app.schemas import (
     CaseMatchesResponse,
     CaseOut,
@@ -16,11 +31,7 @@ from app.schemas import (
     CaseType,
 )
 
-router = APIRouter(
-    prefix="/v1/cases",
-    tags=["cases"],
-    dependencies=[Depends(require_principal)],
-)
+router = APIRouter(prefix="/v1/cases", tags=["cases"])
 
 
 @router.post("", response_model=CaseSubmissionResponse, status_code=status.HTTP_201_CREATED)
@@ -30,22 +41,58 @@ def submit_case(
     subject_label: str = Form("Photo submission"),
     top_k: int = Form(5),
     force: bool = Form(False),
+    installation_id: uuid.UUID | None = Header(
+        default=None,
+        alias="X-Installation-ID",
+    ),
     db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
 ) -> CaseSubmissionResponse:
-    decoded = decode_image(image.file.read())
+    try:
+        decoded = decode_image(image.file.read())
+    except HTTPException:
+        _record_upload_rejection(
+            db,
+            principal.account.id,
+            case_type,
+            "invalid_image",
+            installation_id,
+        )
+        raise
     detected_faces = get_engine().detect_all(decoded)
     if not detected_faces:
+        _record_upload_rejection(
+            db,
+            principal.account.id,
+            case_type,
+            "no_face",
+            installation_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="no face detected",
         )
     if len(detected_faces) > 1:
+        _record_upload_rejection(
+            db,
+            principal.account.id,
+            case_type,
+            "multiple_faces",
+            installation_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="multiple faces detected; upload a photo with one primary person",
         )
     detected = detected_faces[0]
     if not detected.quality.passed and not force:
+        _record_upload_rejection(
+            db,
+            principal.account.id,
+            case_type,
+            "low_quality",
+            installation_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -61,6 +108,7 @@ def submit_case(
         image_bytes=encode_jpeg(decoded),
         face=detected,
         content_type="image/jpeg",
+        account_id=principal.account.id,
     )
     match = search_opposite_cases(
         db,
@@ -68,6 +116,17 @@ def submit_case(
         face=face,
         embedding=detected.embedding,
         top_k=min(max(top_k, 1), 20),
+    )
+    record_case_upload(
+        db,
+        account_id=principal.account.id,
+        case_id=case.id,
+        face_id=face.id,
+        case_type=case_type.value,
+        quality_score=detected.quality.score,
+        forced=force and not detected.quality.passed,
+        match_decision=match.decision,
+        installation_id=installation_id,
     )
     return CaseSubmissionResponse(
         case_id=case.id,
@@ -79,8 +138,12 @@ def submit_case(
 
 
 @router.get("/{case_id}", response_model=CaseOut)
-def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> CaseOut:
-    case = _get_case(db, case_id)
+def get_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> CaseOut:
+    case = _get_owned_case(db, case_id, principal.account.id)
     return CaseOut(
         id=case.id,
         case_type=CaseType(case.case_type),
@@ -94,20 +157,82 @@ def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> CaseOut:
 def get_case_matches(
     case_id: uuid.UUID,
     db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
 ) -> CaseMatchesResponse:
-    return list_case_matches(db, _get_case(db, case_id))
+    return list_case_matches(
+        db,
+        _get_owned_case(db, case_id, principal.account.id),
+    )
 
 
 @router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_case(case_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    delete_case(db, _get_case(db, case_id))
+def remove_case(
+    case_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> None:
+    delete_case(db, _get_owned_case(db, case_id, principal.account.id))
 
 
-def _get_case(db: Session, case_id: uuid.UUID) -> CaseRecord:
-    case = db.get(CaseRecord, case_id)
+def _get_owned_case(
+    db: Session,
+    case_id: uuid.UUID,
+    account_id: uuid.UUID,
+) -> CaseRecord:
+    case = db.scalar(
+        select(CaseRecord)
+        .join(CaseAccount, CaseAccount.case_id == CaseRecord.id)
+        .where(
+            CaseRecord.id == case_id,
+            CaseAccount.account_id == account_id,
+        )
+    )
     if case is None:
+        existing_case = db.get(CaseRecord, case_id)
+        if existing_case is not None:
+            record_event(
+                db,
+                "case_access_rejected",
+                account_id=account_id,
+                data={"case_id": str(case_id)},
+            )
+            record_repeated_failure_risk(
+                db,
+                account_id=account_id,
+                event_type="case_access_rejected",
+                risk_type="repeated_unauthorized_case_access",
+                data={"case_id": str(case_id)},
+            )
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="case not found",
         )
     return case
+
+
+def _record_upload_rejection(
+    db: Session,
+    account_id: uuid.UUID,
+    case_type: CaseType,
+    reason: str,
+    installation_id: uuid.UUID | None,
+) -> None:
+    record_event(
+        db,
+        "case_upload_rejected",
+        account_id=account_id,
+        data={
+            "case_type": case_type.value,
+            "reason": reason,
+            "installation_id": (str(installation_id) if installation_id is not None else None),
+        },
+    )
+    record_repeated_failure_risk(
+        db,
+        account_id=account_id,
+        event_type="case_upload_rejected",
+        risk_type="repeated_rejected_uploads",
+        data={"latest_reason": reason},
+    )
+    db.commit()

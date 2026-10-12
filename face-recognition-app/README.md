@@ -69,6 +69,12 @@ duplicated. Configure it with `RECONCILIATION_ENABLED`,
 `RECONCILIATION_INTERVAL_SECONDS`, `RECONCILIATION_BATCH_SIZE`, and
 `RECONCILIATION_TOP_K`.
 
+When a high-scoring missing/found pair belongs to two different accounts, the API
+creates a private in-app connection notification. Both accounts must consent before
+the server derives distinct six-digit meeting codes. Codes expire after 15 minutes,
+are never stored in plaintext, and are revoked if either party withdraws consent.
+Phone numbers and precise locations are not included in connection responses.
+
 Bulk-ingest an existing repository (`repository/<person_name>/*.jpg`):
 
 ```bash
@@ -87,11 +93,59 @@ docker compose exec api python -m scripts.ingest /data/repository
 | `POST /v1/enroll` | Add a photo. Fields: `image`, `person_name`, `consent_ref?`, `force?`. Rejects low-quality photos unless `force=true`. |
 | `POST /v1/search` | 1:N identification. Returns ranked matches with cosine scores and a `decision` of `match` / `review` / `no_match`. |
 | `POST /v1/cases` | Store a `missing` or `found` case and search only the opposite repository. |
-| `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for a case. |
-| `DELETE /v1/cases/{id}` | Delete a case, its embedding, stored photo, and candidate links. |
+| `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for an owned case. |
+| `DELETE /v1/cases/{id}` | Delete an owned case, its embedding, stored photo, and candidate links. |
+| `GET /v1/connections` | List the authenticated account's private match notifications and consent state. |
+| `POST /v1/connections/{id}/consent` | Consent to the connection; meeting codes activate after mutual consent. |
+| `POST /v1/connections/{id}/withdraw-consent` | Withdraw consent and immediately revoke active meeting codes. |
+| `POST /v1/connections/{id}/meeting-code/verify` | Verify the other participant's short-lived code once. |
+| `POST /v1/connections/{id}/meeting-code/renew` | Rotate expired or used meeting codes after mutual consent. |
+| `POST /v1/audit/installations/register` | Register a random app-installation instance on first launch. This is not proof of an App Store or Play Store installation. |
+| `POST /v1/audit/installations/bind` | Link the installation instance to the current authenticated account. |
+| `GET /v1/audit/summary` | Privileged counts for installations, uploads, matches and risk alerts. Requires `X-Audit-Admin-Key`. |
+| `GET /v1/audit/events` | Privileged paginated event review with event, account, risk and time filters. Requires `X-Audit-Admin-Key`. |
+| `GET /v1/audit/installations` | Privileged installation review with optional account filtering. Requires `X-Audit-Admin-Key`. |
 | `GET /v1/persons`, `GET /v1/persons/{id}` | Repository listing with presigned image URLs. |
 | `DELETE /v1/persons/{id}` | Purge a person's vectors and images (GDPR / BIPA erasure). |
 | `GET /health` | Liveness plus the active `model_tag`. |
+
+## Privacy-safe audit and anomaly review
+
+The mobile app creates a random installation UUID on first launch, keeps it across
+logout, registers it with the API, and links it to the phone account after successful
+authentication. It does not use IMEI, advertising ID, phone serial number, fingerprint,
+or another hardware identifier. Repeated registration updates `last_seen_at` without
+creating another installation record.
+
+Accepted uploads record the account, installation UUID, missing/found role, case ID,
+face/photo ID, quality result and match decision. Rejected uploads record only the
+role and reason. Confirmed candidate matches link both case IDs and both face IDs with
+the score, model tag and whether matching happened immediately or during scheduled
+reconciliation. Audit metadata never contains photo bytes, raw OTPs, refresh tokens,
+plaintext meeting codes, precise locations or unmasked phone numbers.
+
+Structured `risk_alert` events identify reviewable patterns without asserting criminal
+intent: repeated OTP/code failures, upload bursts, repeated rejected uploads,
+missing/found role switching, one account matching its own opposite-role cases,
+unlinked installation uploads, excessive installation counts and repeated unauthorized
+case/connection access. These are evidence for authorized review, not trafficking
+determinations.
+
+Set a unique `AUDIT_ADMIN_KEY` before sharing the service. Ordinary bearer sessions
+cannot read the audit endpoints. Audit review access is itself recorded. For example:
+
+```bash
+curl -H "X-Audit-Admin-Key: <audit-admin-key>" \
+  "localhost:8000/v1/audit/events?risk_only=true&limit=100"
+```
+
+`AUDIT_RETENTION_DAYS` defaults to 365 days. Installation records become inactive after
+`AUDIT_INSTALLATION_INACTIVITY_DAYS` (also 365 by default). Schedule the following
+maintenance command daily in production:
+
+```bash
+docker compose exec api python -m scripts.prune_audit
+```
 
 ## Thresholds — calibrate before you trust them
 
@@ -137,6 +191,9 @@ a human instead of being asserted as matches.
   are returned only when `OTP_DELIVERY_MODE=development`; never use that mode on a
   public server. Add an SMS provider, HTTPS, upload rate limits, and stricter
   role/case authorization before production.
+- Face similarity and a successful meeting-code exchange do not prove identity,
+  guardianship, custody, intent, or a safe child handoff. They must never
+  automatically authorize a child transfer.
 
 ## Development
 

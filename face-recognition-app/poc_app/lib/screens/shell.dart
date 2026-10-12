@@ -2,16 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../auth/auth_controller.dart';
+import '../connections/connection_repository.dart';
 import 'gallery_screen.dart';
 import 'match_screen.dart';
 import 'my_matches_screen.dart';
 import 'profile_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.state, this.auth});
+  const AppShell({
+    super.key,
+    required this.state,
+    this.auth,
+    this.connections,
+  });
 
   final AppState state;
   final AuthController? auth;
+  final ConnectionRepository? connections;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -31,7 +38,7 @@ class _AppShellState extends State<AppShell> {
             index: _index,
             children: [
               MatchScreen(state: widget.state),
-              const MyMatchesScreen(),
+              MyMatchesScreen(repository: widget.connections),
               GalleryScreen(state: widget.state),
               ProfileScreen(auth: widget.auth),
             ],

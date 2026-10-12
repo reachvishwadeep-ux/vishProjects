@@ -12,9 +12,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.audit_service import record_event, record_risk_alert
 from app.config import get_settings
 from app.db import get_db
-from app.models import Account, AuditEvent, AuthSession, OtpChallenge
+from app.models import Account, AuthSession, OtpChallenge
 from app.schemas import AccountOut, TokenResponse
 
 PHONE_PATTERN = re.compile(r"^\+[1-9]\d{7,14}$")
@@ -55,6 +56,13 @@ def create_otp_challenge(db: Session, phone_number: str) -> tuple[OtpChallenge, 
     )
     if request_count is not None and request_count >= settings.otp_max_requests_per_hour:
         _audit(db, "otp_request_rate_limited", phone_number=phone_number)
+        record_risk_alert(
+            db,
+            risk_type="otp_request_rate_limited",
+            severity="high",
+            actor_phone_hash=_phone_hash(phone_number),
+            data={"requests_in_last_hour": request_count},
+        )
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -127,6 +135,14 @@ def verify_otp(
     expected = _otp_hash(challenge.id, phone_number, code.strip())
     if not hmac.compare_digest(challenge.code_hash, expected):
         _audit(db, "otp_verification_failed", phone_number=phone_number)
+        if challenge.attempts >= settings.audit_failed_action_limit:
+            record_risk_alert(
+                db,
+                risk_type="repeated_otp_verification_failures",
+                severity="high",
+                actor_phone_hash=_phone_hash(phone_number),
+                data={"challenge_attempts": challenge.attempts},
+            )
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -295,14 +311,14 @@ def _audit(
     *,
     account: Account | None = None,
     phone_number: str | None = None,
+    data: dict[str, object] | None = None,
 ) -> None:
-    db.add(
-        AuditEvent(
-            account_id=account.id if account is not None else None,
-            actor_phone_hash=_phone_hash(phone_number) if phone_number is not None else None,
-            event_type=event_type,
-            event_data={},
-        )
+    record_event(
+        db,
+        event_type,
+        account_id=account.id if account is not None else None,
+        actor_phone_hash=(_phone_hash(phone_number) if phone_number is not None else None),
+        data=data,
     )
 
 

@@ -12,12 +12,14 @@ class RemoteMatcher implements Matcher {
     required this.baseUrl,
     http.Client? client,
     this.tokenProvider,
+    this.installationIdProvider,
     this.onAuthenticationFailure,
   }) : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
   final Future<String?> Function()? tokenProvider;
+  final Future<String> Function()? installationIdProvider;
   final Future<void> Function()? onAuthenticationFailure;
 
   @override
@@ -54,6 +56,10 @@ class RemoteMatcher implements Matcher {
     }
     if (accessToken != null) {
       request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    final installationId = await installationIdProvider?.call();
+    if (installationId != null) {
+      request.headers['X-Installation-ID'] = installationId;
     }
 
     final streamed = await _client.send(request).timeout(
