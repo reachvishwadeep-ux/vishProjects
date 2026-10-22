@@ -1,7 +1,8 @@
 from langchain.tools import tool
 from langchain.chat_models import init_chat_model
 
-model = init_chat_model("gpt-3.5-turbo", temperature=0.0)
+model = None
+model_with_tools = None
 
 @tool("add", return_direct=True)
 def add(x:int, y:int) ->int:
@@ -15,7 +16,14 @@ def subtract(x:int, y:int) ->int:
 
 tools=[add, subtract]
 tools_by_name = {tool.name: tool for tool in tools}
-model_with_tools = model.bind_tools(tools)
+
+def _get_model_with_tools():
+    global model, model_with_tools
+    if model_with_tools is None:
+        if model is None:
+            model = init_chat_model("gpt-3.5-turbo", temperature=0.0)
+        model_with_tools = model.bind_tools(tools)
+    return model_with_tools
 
 from langchain.messages import AnyMessage
 from typing_extensions import TypedDict, Annotated
@@ -31,7 +39,7 @@ def llm_call(state: dict):
     """LLM decides whether to call a tool or not"""
 
     return {
-        "messages":[model_with_tools.invoke(
+        "messages":[_get_model_with_tools().invoke(
             [
             SystemMessage(
                         content="You are a helpful assistant tasked with " \
@@ -53,6 +61,5 @@ def tool_node(state:dict):
         result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
     
     return {"messages": result}
-
 
 

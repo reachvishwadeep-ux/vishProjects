@@ -1,0 +1,13 @@
+pytest
+pytest-cov
+coverage
+numpy
+scikit-learn
+python-dotenv
+openai
+ollama
+pymupdf
+langchain
+langchain-text-splitters
+langgraph
+ipython
