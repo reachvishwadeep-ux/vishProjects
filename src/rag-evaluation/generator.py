@@ -1,8 +1,14 @@
-from langchain_openai import ChatOpenAI
-from langsmith import traceable
-import retriever
+import sys
+from pathlib import Path
 
-llm = ChatOpenAI(model="gpt-5.4", temperature=1)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import retriever
+from langsmith import traceable
+
+from common.langchain_utils import get_chat_openai
+
+llm = get_chat_openai(model="gpt-5.4", temperature=1)
 
 @traceable
 def rag_bot(question: str) -> dict:

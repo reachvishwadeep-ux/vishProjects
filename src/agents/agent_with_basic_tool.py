@@ -1,10 +1,14 @@
 # agent with basic tool
-from langchain.agents import create_agent
-from langchain_openai import ChatOpenAI
-from langchain.tools import tool
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
 
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from langchain.agents import create_agent
+from langchain.tools import tool
+
+from common.langchain_utils import get_chat_openai
+
 
 @tool
 def add_numbers(a:float, b:float) -> float:
@@ -23,8 +27,7 @@ def add_numbers(a:float, b:float) -> float:
     return f"the result of adding {a} and {b} is {result}"
 
 
-#set temperature to 0 for deterministic responses.
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+model = get_chat_openai()
 
 """
 under the hood, the create_agent will create an agent and do following steps:
@@ -43,7 +46,3 @@ agent = create_agent(model,
 
 result = agent.invoke({"messages":[{"role":"user", "content":"what is 2+2 ?"}]})
 print(result["messages"][-1].content)
-
-
-
-

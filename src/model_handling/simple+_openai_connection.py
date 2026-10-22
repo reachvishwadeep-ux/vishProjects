@@ -1,19 +1,16 @@
-import json
-from openai import OpenAI
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
 
-load_dotenv()
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-client = OpenAI()
+from common.openai_utils import chat_completion
 
-response = client.chat.completions.create(
-    model="gpt-4.1-mini",
-    messages=[{"role":"user","content":"list input args of \n"
+print(chat_completion(
+    "list input args of \n"
     "client.chat.completions.create API from OpenAI which can affect model accuracy \n"
-    "and performance. Return the crisp response in JSON format only."}]
-    )
-
-print(response.choices[0].message.content)
+    "and performance. Return the crisp response in JSON format only.",
+    model="gpt-4.1-mini",
+))
 
 """
 A typical response would be something like this:
@@ -33,5 +30,3 @@ A typical response would be something like this:
 
 
 """
-
-

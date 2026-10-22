@@ -1,11 +1,16 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
+from common.env import load_env
+
+load_env()
 
 #os.environ.setdefault("USER_AGENT", "vishProjects-rag-eval/1.0")
 

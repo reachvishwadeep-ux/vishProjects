@@ -1,4 +1,9 @@
-import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.json_utils import parse_json_response, strip_code_fences
 
 json_response_with_markdown = """ '''json
 {
@@ -10,12 +15,7 @@ json_response_with_markdown = """ '''json
 '''
 """
 
-clean_jsosn_response = json_response_with_markdown.replace("'''json","").replace("'''","")
+print(strip_code_fences(json_response_with_markdown))
 
-try:
-    print(clean_jsosn_response)
-    data = json.loads(clean_jsosn_response)
-    
-except json.JSONDecodeError as e:
-    print("Error decoding JSON:", e)
-
+data = parse_json_response(json_response_with_markdown)
+print(data)

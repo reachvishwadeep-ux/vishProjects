@@ -1,4 +1,10 @@
-import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.json_utils import parse_json_response
+from common.prompts import PRODUCT_REVIEW_FIELDS
 
 my_json_response = """
 {
@@ -9,21 +15,7 @@ my_json_response = """
 }
 """
 
-try:
-    data = json.loads(my_json_response)
+data = parse_json_response(my_json_response, required_fields=PRODUCT_REVIEW_FIELDS)
 
-    if (isinstance(data, (dict))):
-        fields = data.keys()
-        required_fields = ["sentiment", "rating_estimate","key_issues",
-                           "would_recommend"]
-        for item in required_fields:
-            if item not in fields:
-                raise ValueError(f"missing required field: {item}")
-    else:
-        raise ValueError("Response is not a JSON Object")
-    
+if data is not None:
     print(f"All Good JSON data: {data}")
-          
-
-except json.JSONDecodeError as e:
-    print("Error decoding JSON:", e)

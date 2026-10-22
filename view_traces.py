@@ -42,6 +42,3 @@ def view_traces():
 
 if __name__ == "__main__":
     view_traces()
-
-if __name__ == "__main__":
-    view_traces()
