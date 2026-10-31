@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     otp_max_requests_per_hour: int = 5
     otp_max_verification_attempts: int = 5
     otp_delivery_mode: str = "development"
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_verify_service_sid: str | None = None
     meeting_code_secret: str = "dev-only-change-me"
     meeting_code_ttl_seconds: int = 900
     audit_admin_key: str = "dev-only-change-me"

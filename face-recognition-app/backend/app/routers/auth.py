@@ -36,7 +36,7 @@ def request_otp(payload: OtpRequest, db: Session = Depends(get_db)) -> OtpReques
     return OtpRequestResponse(
         challenge_id=challenge.id,
         expires_in=settings.otp_ttl_seconds,
-        development_code=code if settings.otp_delivery_mode == "development" else None,
+        development_code=code,
     )
 
 
