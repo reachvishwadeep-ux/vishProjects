@@ -52,6 +52,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-demo-jwt-secret-change-before-sharing}
       OTP_HASH_SECRET: ${OTP_HASH_SECRET:-local-demo-otp-secret-change-before-sharing}
       OTP_DELIVERY_MODE: ${OTP_DELIVERY_MODE:-development}
+      TELNYX_API_KEY: ${TELNYX_API_KEY:-}
+      TELNYX_VERIFY_PROFILE_ID: ${TELNYX_VERIFY_PROFILE_ID:-}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID:-}

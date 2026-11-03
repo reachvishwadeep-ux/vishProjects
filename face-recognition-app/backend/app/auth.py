@@ -18,7 +18,9 @@ from app.db import get_db
 from app.models import Account, AuthSession, OtpChallenge
 from app.otp_delivery import (
     OtpDeliveryError,
+    check_telnyx_verification,
     check_twilio_verification,
+    send_telnyx_verification,
     send_twilio_verification,
 )
 from app.schemas import AccountOut, TokenResponse
@@ -48,7 +50,11 @@ def create_otp_challenge(
     phone_number: str,
 ) -> tuple[OtpChallenge, str | None]:
     settings = get_settings()
-    if settings.otp_delivery_mode not in {"development", "twilio_verify"}:
+    if settings.otp_delivery_mode not in {
+        "development",
+        "telnyx_verify",
+        "twilio_verify",
+    }:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="OTP delivery is not configured",
@@ -111,23 +117,28 @@ def create_otp_challenge(
         expires_at=now + timedelta(seconds=settings.otp_ttl_seconds),
     )
     db.add(challenge)
-    if settings.otp_delivery_mode == "twilio_verify":
+    if settings.otp_delivery_mode in {"telnyx_verify", "twilio_verify"}:
+        provider = settings.otp_delivery_mode
         try:
-            verification_sid = send_twilio_verification(phone_number, settings)
+            if provider == "telnyx_verify":
+                verification_id = send_telnyx_verification(phone_number, settings)
+                challenge.code_hash = f"telnyx:{verification_id}"
+            else:
+                verification_id = send_twilio_verification(phone_number, settings)
+                challenge.code_hash = f"twilio:{verification_id}"
         except OtpDeliveryError:
             challenge.consumed_at = now
             _audit(
                 db,
                 "otp_delivery_failed",
                 phone_number=phone_number,
-                data={"provider": "twilio_verify"},
+                data={"provider": provider},
             )
             db.commit()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="OTP delivery is temporarily unavailable",
             ) from None
-        challenge.code_hash = f"twilio:{verification_sid}"
     _audit(
         db,
         "otp_requested",
@@ -169,15 +180,23 @@ def verify_otp(
             detail="too many verification attempts",
         )
 
-    if challenge.code_hash.startswith("twilio:"):
+    provider: str | None = None
+    if challenge.code_hash.startswith("telnyx:"):
+        provider = "telnyx_verify"
+        check_verification = check_telnyx_verification
+    elif challenge.code_hash.startswith("twilio:"):
+        provider = "twilio_verify"
+        check_verification = check_twilio_verification
+
+    if provider is not None:
         try:
-            verified = check_twilio_verification(phone_number, code.strip(), settings)
+            verified = check_verification(phone_number, code.strip(), settings)
         except OtpDeliveryError:
             _audit(
                 db,
                 "otp_verification_unavailable",
                 phone_number=phone_number,
-                data={"provider": "twilio_verify"},
+                data={"provider": provider},
             )
             db.commit()
             raise HTTPException(

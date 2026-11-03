@@ -29,6 +29,8 @@ def settings() -> SimpleNamespace:
         otp_max_requests_per_hour=5,
         otp_max_verification_attempts=5,
         otp_delivery_mode="development",
+        telnyx_api_key=None,
+        telnyx_verify_profile_id=None,
         twilio_account_sid=None,
         twilio_auth_token=None,
         twilio_verify_service_sid=None,
@@ -172,6 +174,166 @@ def test_repeated_otp_failures_create_a_risk_alert(client: TestClient) -> None:
     alerts = session.query(AuditEvent).filter_by(event_type="risk_alert").all()
     assert len(alerts) == 1
     assert alerts[0].event_data["risk_type"] == "repeated_otp_verification_failures"
+
+
+def test_telnyx_verify_login(
+    client: TestClient,
+    monkeypatch,
+    settings: SimpleNamespace,
+) -> None:
+    settings.otp_delivery_mode = "telnyx_verify"
+    settings.telnyx_api_key = "KEYtest"
+    settings.telnyx_verify_profile_id = "profile-test"
+    sent_to: list[str] = []
+    checked: list[tuple[str, str]] = []
+
+    def send(phone_number: str, _settings: SimpleNamespace) -> str:
+        sent_to.append(phone_number)
+        return "verification-test"
+
+    def check(
+        phone_number: str,
+        code: str,
+        _settings: SimpleNamespace,
+    ) -> bool:
+        checked.append((phone_number, code))
+        return True
+
+    monkeypatch.setattr(auth, "send_telnyx_verification", send)
+    monkeypatch.setattr(auth, "check_telnyx_verification", check)
+
+    requested = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+1 202 555 0100"},
+    )
+    assert requested.status_code == 202
+    challenge = requested.json()
+    assert challenge["development_code"] is None
+    assert sent_to == ["+12025550100"]
+
+    session = client.app.dependency_overrides[get_db]()
+    stored = session.get(OtpChallenge, uuid.UUID(challenge["challenge_id"]))
+    assert stored.code_hash == "telnyx:verification-test"
+
+    verified = client.post(
+        "/v1/auth/otp/verify",
+        json={
+            "challenge_id": challenge["challenge_id"],
+            "phone_number": "+12025550100",
+            "code": "123456",
+        },
+    )
+    assert verified.status_code == 200
+    assert verified.json()["account"]["phone_number"] == "+12025550100"
+    assert checked == [("+12025550100", "123456")]
+
+
+def test_telnyx_rejected_code_is_counted(
+    client: TestClient,
+    monkeypatch,
+    settings: SimpleNamespace,
+) -> None:
+    settings.otp_delivery_mode = "telnyx_verify"
+    monkeypatch.setattr(
+        auth,
+        "send_telnyx_verification",
+        lambda phone_number, configured: "verification-test",
+    )
+    monkeypatch.setattr(
+        auth,
+        "check_telnyx_verification",
+        lambda phone_number, code, configured: False,
+    )
+
+    requested = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+12025550100"},
+    )
+    response = client.post(
+        "/v1/auth/otp/verify",
+        json={
+            "challenge_id": requested.json()["challenge_id"],
+            "phone_number": "+12025550100",
+            "code": "000000",
+        },
+    )
+    assert response.status_code == 400
+
+    session = client.app.dependency_overrides[get_db]()
+    challenge = session.get(
+        OtpChallenge,
+        uuid.UUID(requested.json()["challenge_id"]),
+    )
+    assert challenge.attempts == 1
+
+
+def test_telnyx_delivery_failure_consumes_challenge_for_rate_limiting(
+    client: TestClient,
+    monkeypatch,
+    settings: SimpleNamespace,
+) -> None:
+    settings.otp_delivery_mode = "telnyx_verify"
+
+    def fail(phone_number: str, configured: SimpleNamespace) -> str:
+        raise OtpDeliveryError("provider unavailable")
+
+    monkeypatch.setattr(auth, "send_telnyx_verification", fail)
+
+    response = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+12025550100"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "OTP delivery is temporarily unavailable"
+
+    session = client.app.dependency_overrides[get_db]()
+    challenge = session.query(OtpChallenge).one()
+    assert challenge.consumed_at is not None
+    event = session.query(AuditEvent).filter_by(event_type="otp_delivery_failed").one()
+    assert event.event_data["provider"] == "telnyx_verify"
+
+
+def test_telnyx_outage_does_not_consume_attempt(
+    client: TestClient,
+    monkeypatch,
+    settings: SimpleNamespace,
+) -> None:
+    settings.otp_delivery_mode = "telnyx_verify"
+    monkeypatch.setattr(
+        auth,
+        "send_telnyx_verification",
+        lambda phone_number, configured: "verification-test",
+    )
+
+    def fail(
+        phone_number: str,
+        code: str,
+        configured: SimpleNamespace,
+    ) -> bool:
+        raise OtpDeliveryError("provider unavailable")
+
+    monkeypatch.setattr(auth, "check_telnyx_verification", fail)
+    requested = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+12025550100"},
+    )
+
+    response = client.post(
+        "/v1/auth/otp/verify",
+        json={
+            "challenge_id": requested.json()["challenge_id"],
+            "phone_number": "+12025550100",
+            "code": "123456",
+        },
+    )
+    assert response.status_code == 503
+
+    session = client.app.dependency_overrides[get_db]()
+    challenge = session.get(
+        OtpChallenge,
+        uuid.UUID(requested.json()["challenge_id"]),
+    )
+    assert challenge.attempts == 0
 
 
 def test_twilio_verify_login(
