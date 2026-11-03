@@ -49,6 +49,38 @@ curl -X POST localhost:8000/v1/auth/otp/verify \
   -d '{"phone_number":"+919876543210","challenge_id":"<challenge-id>","code":"<development-code>"}'
 ```
 
+### Send real SMS with Telnyx Verify
+
+Telnyx Verify can replace the returned development code without changing the Flutter
+login flow. Create a Telnyx API key and a Verify Profile configured for six-digit SMS
+codes, then set these values in the environment used by Docker Compose:
+
+```dotenv
+OTP_DELIVERY_MODE=telnyx_verify
+TELNYX_API_KEY=<telnyx-api-key>
+TELNYX_VERIFY_PROFILE_ID=<telnyx-verify-profile-id>
+```
+
+Rebuild and restart the API:
+
+```bash
+docker compose up -d --build api
+```
+
+`POST /v1/auth/otp/request` will now send the code by SMS and omit
+`development_code`; the existing verification endpoint accepts the received code.
+Telnyx trial accounts include $5 testing credit and do not require a card, but Verify
+is limited to SMS, one Verify Profile, one verified destination number and 50
+verifications per day. Trial restrictions can change; check the
+[official trial limits](https://developers.telnyx.com/docs/account-setup/levels-and-capabilities/trial).
+Keep the API key on the backend, never in the Flutter app or Git. Use
+`OTP_DELIVERY_MODE=development` for free local testing.
+
+Twilio Verify remains available as a fallback. Configure
+`OTP_DELIVERY_MODE=twilio_verify`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
+`TWILIO_VERIFY_SERVICE_SID` for a six-digit Verify Service. Twilio trial accounts can
+send only to destination numbers verified in the Twilio Console.
+
 Create missing/found cases. Each upload searches only the opposite repository, and
 reviewable candidates are retained for later retrieval:
 
@@ -85,7 +117,7 @@ docker compose exec api python -m scripts.ingest /data/repository
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /v1/auth/otp/request` | Request a six-digit phone OTP. Local development returns `development_code`; production requires an SMS adapter. |
+| `POST /v1/auth/otp/request` | Request a phone OTP. Development returns `development_code`; `telnyx_verify` or `twilio_verify` sends it by SMS. |
 | `POST /v1/auth/otp/verify` | Verify an OTP and receive a 15-minute access token plus rotating refresh token. |
 | `POST /v1/auth/refresh` | Rotate the refresh token and issue a new access token. |
 | `POST /v1/auth/logout` | Revoke the current authenticated session. |
@@ -189,8 +221,10 @@ a human instead of being asserted as matches.
   with registration. Never scrape faces.
 - Recognition routes require a phone-authenticated bearer session. Development OTPs
   are returned only when `OTP_DELIVERY_MODE=development`; never use that mode on a
-  public server. Add an SMS provider, HTTPS, upload rate limits, and stricter
-  role/case authorization before production.
+  public server. Telnyx Verify is available with
+  `OTP_DELIVERY_MODE=telnyx_verify`, and Twilio remains an optional fallback with
+  `OTP_DELIVERY_MODE=twilio_verify`. HTTPS, upload rate limits, and stricter role/case
+  authorization are still required before production.
 - Face similarity and a successful meeting-code exchange do not prove identity,
   guardianship, custody, intent, or a safe child handoff. They must never
   automatically authorize a child transfer.

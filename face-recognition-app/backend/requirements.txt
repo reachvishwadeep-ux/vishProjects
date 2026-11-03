@@ -12,3 +12,5 @@ opencv-python-headless==4.10.0.84
 numpy==1.26.4
 boto3==1.35.90
 PyJWT==2.10.1
+telnyx==4.190.0
+twilio==9.12.0
