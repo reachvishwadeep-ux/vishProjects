@@ -106,6 +106,25 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<MatchOutcome> comparePhotos(
+    List<MatchPhoto> photos, {
+    required CaseType caseType,
+  }) async {
+    await initialize();
+    _matching = true;
+    notifyListeners();
+    try {
+      return await matcher.matchPhotos(
+        photos: photos,
+        gallery: _gallery,
+        caseType: caseType,
+      );
+    } finally {
+      _matching = false;
+      notifyListeners();
+    }
+  }
+
   Future<Uint8List> demoProbe(StoredImage image) async {
     return makeProbeCopy(await File(image.path).readAsBytes());
   }

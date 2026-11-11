@@ -27,6 +27,13 @@ class CaseHit:
     score: float
 
 
+@dataclass(frozen=True)
+class CasePhoto:
+    image_bytes: bytes
+    face: DetectedFace
+    content_type: str = "image/jpeg"
+
+
 def opposite_case_type(case_type: CaseType) -> CaseType:
     return CaseType.found if case_type == CaseType.missing else CaseType.missing
 
@@ -50,6 +57,33 @@ def create_case(
     content_type: str,
     account_id: uuid.UUID,
 ) -> tuple[CaseRecord, CaseFace]:
+    case, faces = create_case_with_faces(
+        db,
+        case_type=case_type,
+        subject_label=subject_label,
+        photos=[
+            CasePhoto(
+                image_bytes=image_bytes,
+                face=face,
+                content_type=content_type,
+            )
+        ],
+        account_id=account_id,
+    )
+    return case, faces[0]
+
+
+def create_case_with_faces(
+    db: Session,
+    *,
+    case_type: CaseType,
+    subject_label: str,
+    photos: list[CasePhoto],
+    account_id: uuid.UUID,
+) -> tuple[CaseRecord, list[CaseFace]]:
+    if not photos:
+        raise ValueError("at least one case photo is required")
+
     case = CaseRecord(
         case_type=case_type.value,
         subject_label=subject_label.strip() or "Photo submission",
@@ -60,24 +94,63 @@ def create_case(
     db.add(CaseAccount(case_id=case.id, account_id=account_id))
 
     store = get_store()
-    key = f"cases/{case.id}/{uuid.uuid4()}.jpg"
-    store.put(key, image_bytes, content_type=content_type)
-
-    case_face = CaseFace(
-        case_id=case.id,
-        case_type=case_type.value,
-        image_key=key,
-        bbox=list(face.bbox),
-        det_score=face.det_score,
-        quality=face.quality.score,
-        model_tag=get_engine().model_tag,
-        embedding=face.embedding.tolist(),
-    )
-    db.add(case_face)
+    case_faces: list[CaseFace] = []
+    for photo in photos:
+        key = f"cases/{case.id}/{uuid.uuid4()}.jpg"
+        store.put(key, photo.image_bytes, content_type=photo.content_type)
+        case_face = CaseFace(
+            case_id=case.id,
+            case_type=case_type.value,
+            image_key=key,
+            bbox=list(photo.face.bbox),
+            det_score=photo.face.det_score,
+            quality=photo.face.quality.score,
+            model_tag=get_engine().model_tag,
+            embedding=photo.face.embedding.tolist(),
+        )
+        db.add(case_face)
+        case_faces.append(case_face)
     db.commit()
     db.refresh(case)
-    db.refresh(case_face)
-    return case, case_face
+    for case_face in case_faces:
+        db.refresh(case_face)
+    return case, case_faces
+
+
+def combine_case_search_results(
+    results: list[CaseSearchResult],
+    *,
+    top_k: int,
+) -> CaseSearchResult:
+    if not results:
+        return CaseSearchResult(
+            decision="no_match",
+            threshold=get_settings().match_threshold,
+            results=[],
+        )
+
+    decision_rank = {"no_match": 0, "review": 1, "match": 2}
+    decision = max(
+        (result.decision for result in results),
+        key=lambda value: decision_rank.get(value, 0),
+    )
+    best_by_case: dict[uuid.UUID, CaseCandidate] = {}
+    for result in results:
+        for candidate in result.results:
+            existing = best_by_case.get(candidate.case_id)
+            if existing is None or candidate.score > existing.score:
+                best_by_case[candidate.case_id] = candidate
+
+    candidates = sorted(
+        best_by_case.values(),
+        key=lambda candidate: candidate.score,
+        reverse=True,
+    )[:top_k]
+    return CaseSearchResult(
+        decision=decision,
+        threshold=results[0].threshold,
+        results=candidates,
+    )
 
 
 def search_opposite_cases(

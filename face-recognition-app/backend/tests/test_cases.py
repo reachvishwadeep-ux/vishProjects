@@ -97,22 +97,21 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
             assert image.shape == (16, 16, 3)
             return [_detected_face()]
 
-    def fake_create_case(
+    def fake_create_case_with_faces(
         db: object,
         *,
         case_type: CaseType,
         subject_label: str,
-        image_bytes: bytes,
-        face: DetectedFace,
-        content_type: str,
+        photos: list[case_service.CasePhoto],
         account_id: uuid.UUID,
-    ) -> tuple[SimpleNamespace, SimpleNamespace]:
+    ) -> tuple[SimpleNamespace, list[SimpleNamespace]]:
         captured_case_types.append(case_type)
         assert db is fake_db
         assert subject_label == "Test submission"
-        assert image_bytes.startswith(b"\xff\xd8")
-        assert face.det_score == 0.99
-        assert content_type == "image/jpeg"
+        assert len(photos) == 1
+        assert photos[0].image_bytes.startswith(b"\xff\xd8")
+        assert photos[0].face.det_score == 0.99
+        assert photos[0].content_type == "image/jpeg"
         assert account_id == authenticated_account_id
         return (
             SimpleNamespace(
@@ -120,7 +119,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
                 case_type=case_type.value,
                 subject_label=subject_label,
             ),
-            SimpleNamespace(id=uuid.uuid4()),
+            [SimpleNamespace(id=uuid.uuid4())],
         )
 
     def fake_search(
@@ -156,8 +155,13 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
     app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
         account=SimpleNamespace(id=authenticated_account_id)
     )
-    monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
-    monkeypatch.setattr(cases, "create_case", fake_create_case)
+    engine = FakeEngine()
+    monkeypatch.setattr(cases, "get_engine", lambda: engine)
+    monkeypatch.setattr(
+        cases,
+        "create_case_with_faces",
+        fake_create_case_with_faces,
+    )
     monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
     monkeypatch.setattr(cases, "record_case_upload", lambda *args, **kwargs: None)
 
@@ -174,6 +178,8 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
 
     assert response.status_code == 201
     assert response.json()["case_id"] == str(submitted_case_id)
+    assert response.json()["photo_count"] == 1
+    assert len(response.json()["qualities"]) == 1
     assert response.json()["match"]["results"][0]["case_id"] == str(candidate_case_id)
     assert captured_case_types == [CaseType.missing]
 
@@ -190,7 +196,8 @@ def test_submission_rejects_multiple_faces(monkeypatch) -> None:
     app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
         account=SimpleNamespace(id=uuid.uuid4())
     )
-    monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
+    engine = FakeEngine()
+    monkeypatch.setattr(cases, "get_engine", lambda: engine)
     monkeypatch.setattr(
         cases,
         "_record_upload_rejection",
@@ -206,7 +213,198 @@ def test_submission_rejects_multiple_faces(monkeypatch) -> None:
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"].startswith("multiple faces detected")
+    detail = response.json()["detail"]
+    assert detail["error"] == "Photo 1 contains more than one person."
+    assert detail["photo_index"] == 1
+    assert detail["reasons"] == [
+        "Choose a photo showing only the person for this case."
+    ]
+
+
+def test_submission_groups_multiple_photos_under_one_case(monkeypatch) -> None:
+    submitted_case_id = uuid.uuid4()
+    authenticated_account_id = uuid.uuid4()
+    candidate_case_id = uuid.uuid4()
+    captured_photo_count = 0
+    searched_face_ids: list[uuid.UUID] = []
+
+    class FakeEngine:
+        def detect_all(self, image: np.ndarray) -> list[DetectedFace]:
+            return [_detected_face()]
+
+    def fake_create_case_with_faces(
+        db: object,
+        *,
+        case_type: CaseType,
+        subject_label: str,
+        photos: list[case_service.CasePhoto],
+        account_id: uuid.UUID,
+    ) -> tuple[SimpleNamespace, list[SimpleNamespace]]:
+        nonlocal captured_photo_count
+        captured_photo_count = len(photos)
+        assert case_type == CaseType.found
+        assert account_id == authenticated_account_id
+        return (
+            SimpleNamespace(
+                id=submitted_case_id,
+                case_type=case_type.value,
+                subject_label=subject_label,
+            ),
+            [SimpleNamespace(id=uuid.uuid4()) for _ in photos],
+        )
+
+    def fake_search(
+        db: object,
+        *,
+        case: SimpleNamespace,
+        face: SimpleNamespace,
+        embedding: np.ndarray,
+        top_k: int,
+    ) -> CaseSearchResult:
+        searched_face_ids.append(face.id)
+        score = 0.72 + (0.1 * len(searched_face_ids))
+        return CaseSearchResult(
+            decision="match",
+            threshold=0.42,
+            results=[
+                CaseCandidate(
+                    case_id=candidate_case_id,
+                    subject_label="Missing person submission",
+                    score=score,
+                    image_url=f"https://images.example.com/{len(searched_face_ids)}.jpg",
+                )
+            ],
+        )
+
+    fake_db = object()
+    app = FastAPI()
+    app.include_router(cases.router)
+    app.dependency_overrides[get_db] = lambda: fake_db
+    app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
+        account=SimpleNamespace(id=authenticated_account_id)
+    )
+    monkeypatch.setattr(cases, "get_engine", lambda: FakeEngine())
+    monkeypatch.setattr(
+        cases,
+        "create_case_with_faces",
+        fake_create_case_with_faces,
+    )
+    monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
+    monkeypatch.setattr(cases, "record_case_upload", lambda *args, **kwargs: None)
+
+    image = np.zeros((16, 16, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", image)
+    payload = encoded.tobytes()
+    response = TestClient(app).post(
+        "/v1/cases",
+        data={"case_type": "found"},
+        files=[
+            ("images", ("front.jpg", payload, "image/jpeg")),
+            ("images", ("profile.jpg", payload, "image/jpeg")),
+        ],
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["case_id"] == str(submitted_case_id)
+    assert body["photo_count"] == 2
+    assert len(body["qualities"]) == 2
+    assert captured_photo_count == 2
+    assert len(searched_face_ids) == 2
+    assert len(body["match"]["results"]) == 1
+    assert body["match"]["results"][0]["score"] == pytest.approx(0.92)
+    assert body["match"]["results"][0]["image_url"].endswith("/2.jpg")
+
+
+def test_submission_rejects_more_than_five_photos(monkeypatch) -> None:
+    fake_db = object()
+    app = FastAPI()
+    app.include_router(cases.router)
+    app.dependency_overrides[get_db] = lambda: fake_db
+    app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
+        account=SimpleNamespace(id=uuid.uuid4())
+    )
+    monkeypatch.setattr(
+        cases,
+        "_record_upload_rejection",
+        lambda *args, **kwargs: None,
+    )
+
+    image = np.zeros((16, 16, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", image)
+    response = TestClient(app).post(
+        "/v1/cases",
+        data={"case_type": "missing"},
+        files=[
+            ("images", (f"photo-{index}.jpg", encoded.tobytes(), "image/jpeg"))
+            for index in range(6)
+        ],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == (
+        "A case can contain at most 5 photos."
+    )
+
+
+def test_submission_rejects_an_unclear_photo_with_its_position(monkeypatch) -> None:
+    unclear_quality = _quality().model_copy(
+        update={
+            "passed": False,
+            "reasons": ["image too blurry", "face too small"],
+        }
+    )
+
+    class FakeEngine:
+        calls = 0
+
+        def detect_all(self, image: np.ndarray) -> list[DetectedFace]:
+            self.calls += 1
+            face = _detected_face()
+            if self.calls == 2:
+                return [
+                    DetectedFace(
+                        embedding=face.embedding,
+                        bbox=face.bbox,
+                        det_score=face.det_score,
+                        quality=unclear_quality,
+                    )
+                ]
+            return [face]
+
+    fake_db = object()
+    app = FastAPI()
+    app.include_router(cases.router)
+    app.dependency_overrides[get_db] = lambda: fake_db
+    app.dependency_overrides[require_principal] = lambda: SimpleNamespace(
+        account=SimpleNamespace(id=uuid.uuid4())
+    )
+    engine = FakeEngine()
+    monkeypatch.setattr(cases, "get_engine", lambda: engine)
+    monkeypatch.setattr(
+        cases,
+        "_record_upload_rejection",
+        lambda *args, **kwargs: None,
+    )
+
+    image = np.zeros((16, 16, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", image)
+    payload = encoded.tobytes()
+    response = TestClient(app).post(
+        "/v1/cases",
+        data={"case_type": "missing"},
+        files=[
+            ("images", ("clear.jpg", payload, "image/jpeg")),
+            ("images", ("blurry.jpg", payload, "image/jpeg")),
+        ],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "error": "Photo 2 is not clear enough for reliable matching.",
+        "photo_index": 2,
+        "reasons": ["image too blurry", "face too small"],
+    }
 
 
 def test_reconciliation_processes_new_faces_and_advances_the_cursor(

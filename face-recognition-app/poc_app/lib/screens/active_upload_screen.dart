@@ -1,8 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../matching/matcher.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'result_screen.dart';
@@ -11,14 +10,12 @@ class ActiveUploadScreen extends StatefulWidget {
   const ActiveUploadScreen({
     super.key,
     required this.state,
-    required this.probe,
-    required this.fileName,
+    required this.photos,
     required this.caseType,
   });
 
   final AppState state;
-  final Uint8List probe;
-  final String fileName;
+  final List<MatchPhoto> photos;
   final CaseType caseType;
 
   @override
@@ -37,10 +34,9 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
 
   Future<void> _search() async {
     try {
-      final match = widget.state.compare(
-        widget.probe,
+      final match = widget.state.comparePhotos(
+        widget.photos,
         caseType: widget.caseType,
-        fileName: widget.fileName,
       );
       final outcome = await match;
       if (mounted) {
@@ -60,19 +56,28 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
     }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => ResultScreen(probe: widget.probe, outcome: outcome),
+        builder: (_) => ResultScreen(
+          probe: widget.photos.first.bytes,
+          outcome: outcome,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final sizeMb = widget.probe.lengthInBytes / (1024 * 1024);
+    final sizeMb = widget.photos.fold<int>(
+          0,
+          (total, photo) => total + photo.bytes.lengthInBytes,
+        ) /
+        (1024 * 1024);
     final complete = _outcome != null;
+    final photoCount = widget.photos.length;
+    final photoLabel = photoCount == 1 ? '1 photo' : '$photoCount photos';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Matching photo'),
+        title: Text(photoCount == 1 ? 'Matching photo' : 'Matching photos'),
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_rounded),
@@ -153,7 +158,10 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                   children: [
                     AspectRatio(
                       aspectRatio: 1.22,
-                      child: Image.memory(widget.probe, fit: BoxFit.cover),
+                      child: Image.memory(
+                        widget.photos.first.bytes,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                     Positioned(
                       left: 10,
@@ -178,7 +186,7 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                             const SizedBox(width: 7),
                             Expanded(
                               child: Text(
-                                widget.fileName,
+                                '$photoLabel • ${widget.photos.first.fileName}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -277,7 +285,7 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                       duration: const Duration(milliseconds: 220),
                       child: Text(
                         _error != null
-                            ? 'Unable to scan this image'
+                            ? 'Photo needs attention'
                             : complete
                                 ? 'Your result is ready'
                                 : 'Searching for matches...',
@@ -292,10 +300,10 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                     const SizedBox(height: 8),
                     Text(
                       _error != null
-                          ? 'Choose another supported image and try again.'
+                          ? _error.toString()
                           : complete
-                              ? 'The remote comparison finished successfully.'
-                              : 'Uploading and searching the opposite MatchSnap repository.',
+                              ? 'All $photoLabel passed validation and the remote comparison finished successfully.'
+                              : 'Validating and searching $photoLabel against the opposite MatchSnap repository.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: brandMuted,
