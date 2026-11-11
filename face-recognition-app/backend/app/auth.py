@@ -16,6 +16,13 @@ from app.audit_service import record_event, record_risk_alert
 from app.config import get_settings
 from app.db import get_db
 from app.models import Account, AuthSession, OtpChallenge
+from app.otp_delivery import (
+    OtpDeliveryError,
+    check_telnyx_verification,
+    check_twilio_verification,
+    send_telnyx_verification,
+    send_twilio_verification,
+)
 from app.schemas import AccountOut, TokenResponse
 
 PHONE_PATTERN = re.compile(r"^\+[1-9]\d{7,14}$")
@@ -38,12 +45,19 @@ def normalize_phone_number(value: str) -> str:
     return normalized
 
 
-def create_otp_challenge(db: Session, phone_number: str) -> tuple[OtpChallenge, str]:
+def create_otp_challenge(
+    db: Session,
+    phone_number: str,
+) -> tuple[OtpChallenge, str | None]:
     settings = get_settings()
-    if settings.otp_delivery_mode != "development":
+    if settings.otp_delivery_mode not in {
+        "development",
+        "telnyx_verify",
+        "twilio_verify",
+    }:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SMS delivery is not configured",
+            detail="OTP delivery is not configured",
         )
 
     now = datetime.now(UTC)
@@ -87,15 +101,50 @@ def create_otp_challenge(db: Session, phone_number: str) -> tuple[OtpChallenge, 
         )
 
     challenge_id = uuid.uuid4()
-    code = f"{secrets.randbelow(1_000_000):06d}"
+    code = (
+        f"{secrets.randbelow(1_000_000):06d}"
+        if settings.otp_delivery_mode == "development"
+        else None
+    )
     challenge = OtpChallenge(
         id=challenge_id,
         phone_number=phone_number,
-        code_hash=_otp_hash(challenge_id, phone_number, code),
+        code_hash=(
+            _otp_hash(challenge_id, phone_number, code)
+            if code is not None
+            else _otp_hash(challenge_id, phone_number, secrets.token_urlsafe(32))
+        ),
         expires_at=now + timedelta(seconds=settings.otp_ttl_seconds),
     )
     db.add(challenge)
-    _audit(db, "otp_requested", phone_number=phone_number)
+    if settings.otp_delivery_mode in {"telnyx_verify", "twilio_verify"}:
+        provider = settings.otp_delivery_mode
+        try:
+            if provider == "telnyx_verify":
+                verification_id = send_telnyx_verification(phone_number, settings)
+                challenge.code_hash = f"telnyx:{verification_id}"
+            else:
+                verification_id = send_twilio_verification(phone_number, settings)
+                challenge.code_hash = f"twilio:{verification_id}"
+        except OtpDeliveryError:
+            challenge.consumed_at = now
+            _audit(
+                db,
+                "otp_delivery_failed",
+                phone_number=phone_number,
+                data={"provider": provider},
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="OTP delivery is temporarily unavailable",
+            ) from None
+    _audit(
+        db,
+        "otp_requested",
+        phone_number=phone_number,
+        data={"delivery_mode": settings.otp_delivery_mode},
+    )
     db.commit()
     return challenge, code
 
@@ -131,9 +180,35 @@ def verify_otp(
             detail="too many verification attempts",
         )
 
+    provider: str | None = None
+    if challenge.code_hash.startswith("telnyx:"):
+        provider = "telnyx_verify"
+        check_verification = check_telnyx_verification
+    elif challenge.code_hash.startswith("twilio:"):
+        provider = "twilio_verify"
+        check_verification = check_twilio_verification
+
+    if provider is not None:
+        try:
+            verified = check_verification(phone_number, code.strip(), settings)
+        except OtpDeliveryError:
+            _audit(
+                db,
+                "otp_verification_unavailable",
+                phone_number=phone_number,
+                data={"provider": provider},
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="OTP verification is temporarily unavailable",
+            ) from None
+    else:
+        expected = _otp_hash(challenge.id, phone_number, code.strip())
+        verified = hmac.compare_digest(challenge.code_hash, expected)
+
     challenge.attempts += 1
-    expected = _otp_hash(challenge.id, phone_number, code.strip())
-    if not hmac.compare_digest(challenge.code_hash, expected):
+    if not verified:
         _audit(db, "otp_verification_failed", phone_number=phone_number)
         if challenge.attempts >= settings.audit_failed_action_limit:
             record_risk_alert(
