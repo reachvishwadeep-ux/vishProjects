@@ -216,9 +216,7 @@ def test_submission_rejects_multiple_faces(monkeypatch) -> None:
     detail = response.json()["detail"]
     assert detail["error"] == "Photo 1 contains more than one person."
     assert detail["photo_index"] == 1
-    assert detail["reasons"] == [
-        "Choose a photo showing only the person for this case."
-    ]
+    assert detail["reasons"] == ["Choose a photo showing only the person for this case."]
 
 
 def test_submission_groups_multiple_photos_under_one_case(monkeypatch) -> None:
@@ -342,9 +340,7 @@ def test_submission_rejects_more_than_five_photos(monkeypatch) -> None:
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"]["error"] == (
-        "A case can contain at most 5 photos."
-    )
+    assert response.json()["detail"]["error"] == ("A case can contain at most 5 photos.")
 
 
 def test_submission_rejects_an_unclear_photo_with_its_position(monkeypatch) -> None:

@@ -75,9 +75,7 @@ def submit_case(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "error": f"A case can contain at most {MAX_CASE_PHOTOS} photos.",
-                "reasons": [
-                    f"Remove {len(uploads) - MAX_CASE_PHOTOS} photo(s) and try again."
-                ],
+                "reasons": [f"Remove {len(uploads) - MAX_CASE_PHOTOS} photo(s) and try again."],
             },
         )
 
