@@ -4,7 +4,7 @@ import '../models.dart';
 import 'matcher.dart';
 import 'signature.dart';
 
-class PerceptualMatcher implements Matcher {
+class PerceptualMatcher extends Matcher {
   const PerceptualMatcher({
     this.matchThreshold = 0.90,
     this.reviewThreshold = 0.78,

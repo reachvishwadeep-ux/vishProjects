@@ -19,7 +19,14 @@ from app.audit_service import (
     record_repeated_failure_risk,
 )
 from app.auth import AuthPrincipal, require_principal
-from app.case_service import create_case, delete_case, list_case_matches, search_opposite_cases
+from app.case_service import (
+    CasePhoto,
+    combine_case_search_results,
+    create_case_with_faces,
+    delete_case,
+    list_case_matches,
+    search_opposite_cases,
+)
 from app.db import get_db
 from app.face_engine import get_engine
 from app.images import decode_image, encode_jpeg
@@ -32,11 +39,13 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
+MAX_CASE_PHOTOS = 5
 
 
 @router.post("", response_model=CaseSubmissionResponse, status_code=status.HTTP_201_CREATED)
 def submit_case(
-    image: UploadFile = File(...),
+    image: UploadFile | None = File(default=None),
+    images: list[UploadFile] | None = File(default=None),
     case_type: CaseType = Form(...),
     subject_label: str = Form("Photo submission"),
     top_k: int = Form(5),
@@ -48,91 +57,125 @@ def submit_case(
     db: Session = Depends(get_db),
     principal: AuthPrincipal = Depends(require_principal),
 ) -> CaseSubmissionResponse:
-    try:
-        decoded = decode_image(image.file.read())
-    except HTTPException:
-        _record_upload_rejection(
-            db,
-            principal.account.id,
-            case_type,
-            "invalid_image",
-            installation_id,
-        )
-        raise
-    detected_faces = get_engine().detect_all(decoded)
-    if not detected_faces:
-        _record_upload_rejection(
-            db,
-            principal.account.id,
-            case_type,
-            "no_face",
-            installation_id,
-        )
+    uploads = ([image] if image is not None else []) + (images or [])
+    if not uploads:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="no face detected",
+            detail="Upload between 1 and 5 photos for this person.",
         )
-    if len(detected_faces) > 1:
+    if len(uploads) > MAX_CASE_PHOTOS:
         _record_upload_rejection(
             db,
             principal.account.id,
             case_type,
-            "multiple_faces",
-            installation_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="multiple faces detected; upload a photo with one primary person",
-        )
-    detected = detected_faces[0]
-    if not detected.quality.passed and not force:
-        _record_upload_rejection(
-            db,
-            principal.account.id,
-            case_type,
-            "low_quality",
+            "too_many_photos",
             installation_id,
         )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "error": "photo quality too low for recognition",
-                "reasons": detected.quality.reasons,
+                "error": f"A case can contain at most {MAX_CASE_PHOTOS} photos.",
+                "reasons": [f"Remove {len(uploads) - MAX_CASE_PHOTOS} photo(s) and try again."],
             },
         )
 
-    case, face = create_case(
+    prepared_photos: list[CasePhoto] = []
+    for index, upload in enumerate(uploads, start=1):
+        try:
+            decoded = decode_image(upload.file.read())
+        except HTTPException:
+            _reject_photo(
+                db,
+                account_id=principal.account.id,
+                case_type=case_type,
+                reason="invalid_image",
+                message=f"Photo {index} is not a valid JPG or PNG image.",
+                photo_index=index,
+                installation_id=installation_id,
+            )
+        detected_faces = get_engine().detect_all(decoded)
+        if not detected_faces:
+            _reject_photo(
+                db,
+                account_id=principal.account.id,
+                case_type=case_type,
+                reason="no_face",
+                message=f"No clear face was detected in photo {index}.",
+                photo_index=index,
+                installation_id=installation_id,
+                reasons=[
+                    "Use a sharp, well-lit photo with the face unobstructed and facing the camera."
+                ],
+            )
+        if len(detected_faces) > 1:
+            _reject_photo(
+                db,
+                account_id=principal.account.id,
+                case_type=case_type,
+                reason="multiple_faces",
+                message=f"Photo {index} contains more than one person.",
+                photo_index=index,
+                installation_id=installation_id,
+                reasons=["Choose a photo showing only the person for this case."],
+            )
+        detected = detected_faces[0]
+        if not detected.quality.passed and not force:
+            _reject_photo(
+                db,
+                account_id=principal.account.id,
+                case_type=case_type,
+                reason="low_quality",
+                message=f"Photo {index} is not clear enough for reliable matching.",
+                photo_index=index,
+                installation_id=installation_id,
+                reasons=detected.quality.reasons,
+            )
+        prepared_photos.append(
+            CasePhoto(
+                image_bytes=encode_jpeg(decoded),
+                face=detected,
+            )
+        )
+
+    case, faces = create_case_with_faces(
         db,
         case_type=case_type,
         subject_label=subject_label,
-        image_bytes=encode_jpeg(decoded),
-        face=detected,
-        content_type="image/jpeg",
+        photos=prepared_photos,
         account_id=principal.account.id,
     )
-    match = search_opposite_cases(
-        db,
-        case=case,
-        face=face,
-        embedding=detected.embedding,
-        top_k=min(max(top_k, 1), 20),
-    )
-    record_case_upload(
-        db,
-        account_id=principal.account.id,
-        case_id=case.id,
-        face_id=face.id,
-        case_type=case_type.value,
-        quality_score=detected.quality.score,
-        forced=force and not detected.quality.passed,
-        match_decision=match.decision,
-        installation_id=installation_id,
-    )
+    bounded_top_k = min(max(top_k, 1), 20)
+    search_results = [
+        search_opposite_cases(
+            db,
+            case=case,
+            face=face,
+            embedding=photo.face.embedding,
+            top_k=bounded_top_k,
+        )
+        for face, photo in zip(faces, prepared_photos, strict=True)
+    ]
+    match = combine_case_search_results(search_results, top_k=bounded_top_k)
+    for face, photo in zip(faces, prepared_photos, strict=True):
+        record_case_upload(
+            db,
+            account_id=principal.account.id,
+            case_id=case.id,
+            face_id=face.id,
+            case_type=case_type.value,
+            quality_score=photo.face.quality.score,
+            forced=force and not photo.face.quality.passed,
+            match_decision=match.decision,
+            installation_id=installation_id,
+        )
+    qualities = [photo.face.quality for photo in prepared_photos]
     return CaseSubmissionResponse(
         case_id=case.id,
         case_type=case_type,
         subject_label=case.subject_label,
-        quality=detected.quality,
+        photo_count=len(prepared_photos),
+        quality=qualities[0],
+        qualities=qualities,
         match=match,
     )
 
@@ -236,3 +279,31 @@ def _record_upload_rejection(
         data={"latest_reason": reason},
     )
     db.commit()
+
+
+def _reject_photo(
+    db: Session,
+    *,
+    account_id: uuid.UUID,
+    case_type: CaseType,
+    reason: str,
+    message: str,
+    photo_index: int,
+    installation_id: uuid.UUID | None,
+    reasons: list[str] | None = None,
+) -> None:
+    _record_upload_rejection(
+        db,
+        account_id,
+        case_type,
+        reason,
+        installation_id,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={
+            "error": message,
+            "photo_index": photo_index,
+            "reasons": reasons or [],
+        },
+    )

@@ -45,11 +45,21 @@ void main() {
     expect(find.text('I found someone'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Choose from Gallery'),
+      find.text('Choose up to 5 from Gallery'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Choose from Gallery'), findsOneWidget);
+    expect(find.text('Choose up to 5 from Gallery'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.textContaining('A simple background can help face detection'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.textContaining('A simple background can help face detection'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Saved Info'));
     await tester.pumpAndSettle();

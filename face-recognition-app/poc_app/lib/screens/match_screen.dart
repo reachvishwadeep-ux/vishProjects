@@ -1,9 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
+import '../matching/matcher.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'active_upload_screen.dart';
@@ -23,33 +22,63 @@ class _MatchScreenState extends State<MatchScreen> {
   AppState get state => widget.state;
   bool get _isLooking => _caseType == CaseType.missing;
 
-  Future<void> _pick(BuildContext context, ImageSource source) async {
+  Future<void> _pickGallery(BuildContext context) async {
+    final picked = await ImagePicker().pickMultiImage(
+      imageQuality: 92,
+      maxWidth: 1800,
+      limit: 5,
+    );
+    if (picked.isEmpty) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await _openPicked(context, picked);
+  }
+
+  Future<void> _pickCamera(BuildContext context) async {
     final picked = await ImagePicker().pickImage(
-      source: source,
+      source: ImageSource.camera,
       imageQuality: 92,
       maxWidth: 1800,
     );
     if (picked == null) {
       return;
     }
-    final bytes = await picked.readAsBytes();
     if (!context.mounted) {
       return;
     }
-    _openActiveUpload(context, bytes, picked.name);
+    await _openPicked(context, [picked]);
+  }
+
+  Future<void> _openPicked(
+    BuildContext context,
+    List<XFile> picked,
+  ) async {
+    final photos = await Future.wait(
+      picked.map(
+        (photo) async => MatchPhoto(
+          bytes: await photo.readAsBytes(),
+          fileName: photo.name,
+        ),
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    _openActiveUpload(context, photos);
   }
 
   void _openActiveUpload(
     BuildContext context,
-    Uint8List bytes,
-    String fileName,
+    List<MatchPhoto> photos,
   ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ActiveUploadScreen(
           state: state,
-          probe: bytes,
-          fileName: fileName,
+          photos: photos,
           caseType: _caseType,
         ),
       ),
@@ -72,7 +101,7 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
             SizedBox(height: 12),
             Text(
-              'Choose a photo and MatchSnap uploads it to the recognition service. Missing-person photos search the found repository, and found-person photos search the missing repository.',
+              'Choose up to five photos of the same person. MatchSnap checks every photo before searching the opposite repository.',
               style: TextStyle(color: brandMuted, height: 1.5),
             ),
             SizedBox(height: 12),
@@ -255,9 +284,7 @@ class _MatchScreenState extends State<MatchScreen> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: GestureDetector(
-                onTap: state.matching
-                    ? null
-                    : () => _pick(context, ImageSource.gallery),
+                onTap: state.matching ? null : () => _pickGallery(context),
                 child: CustomPaint(
                   foregroundPainter: const _DashedBorderPainter(),
                   child: Container(
@@ -294,8 +321,8 @@ class _MatchScreenState extends State<MatchScreen> {
                         const SizedBox(height: 13),
                         Text(
                           _isLooking
-                              ? 'Add a photo of the missing person'
-                              : 'Add a photo of the person found',
+                              ? 'Add 1–5 photos of the missing person'
+                              : 'Add 1–5 photos of the person found',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
@@ -304,7 +331,7 @@ class _MatchScreenState extends State<MatchScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'JPG or PNG from your device',
+                          'One clear, unobstructed face in each photo',
                           style: TextStyle(color: brandMuted, fontSize: 12),
                         ),
                       ],
@@ -316,21 +343,40 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           const SizedBox(height: 14),
           _GradientButton(
-            onPressed: state.matching
-                ? null
-                : () => _pick(context, ImageSource.gallery),
+            onPressed: state.matching ? null : () => _pickGallery(context),
             icon: Icons.photo_library_outlined,
-            label: 'Choose from Gallery',
+            label: 'Choose up to 5 from Gallery',
           ),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: state.matching
-                  ? null
-                  : () => _pick(context, ImageSource.camera),
+              onPressed: state.matching ? null : () => _pickCamera(context),
               icon: const Icon(Icons.camera_alt_outlined, size: 19),
               label: const Text('Take a photo'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.tips_and_updates_outlined, color: brandPurple),
+                  SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      'For reliable matching, use sharp, well-lit photos with one person, an unobstructed face, and different angles. A simple background can help face detection, but the face quality matters most.',
+                      style: TextStyle(
+                        color: brandMuted,
+                        height: 1.45,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),

@@ -73,7 +73,9 @@ class CaseSubmissionResponse(BaseModel):
     case_id: uuid.UUID
     case_type: CaseType
     subject_label: str
+    photo_count: int
     quality: QualityReport
+    qualities: list[QualityReport]
     match: CaseSearchResult
 
 

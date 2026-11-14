@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models.dart';
 import 'matcher.dart';
 
-class RemoteMatcher implements Matcher {
+class RemoteMatcher extends Matcher {
   RemoteMatcher({
     required this.baseUrl,
     http.Client? client,
@@ -32,7 +32,27 @@ class RemoteMatcher implements Matcher {
     required CaseType caseType,
     required String fileName,
     int topK = 5,
+  }) {
+    return matchPhotos(
+      photos: [MatchPhoto(bytes: probe, fileName: fileName)],
+      gallery: gallery,
+      caseType: caseType,
+      topK: topK,
+    );
+  }
+
+  @override
+  Future<MatchOutcome> matchPhotos({
+    required List<MatchPhoto> photos,
+    required List<StoredImage> gallery,
+    required CaseType caseType,
+    int topK = 5,
   }) async {
+    if (photos.isEmpty || photos.length > 5) {
+      throw const RemoteRecognitionException(
+        'Choose between 1 and 5 photos for this person.',
+      );
+    }
     final stopwatch = Stopwatch()..start();
     final request = http.MultipartRequest(
       'POST',
@@ -40,14 +60,16 @@ class RemoteMatcher implements Matcher {
     )
       ..fields['case_type'] = caseType.name
       ..fields['subject_label'] = _subjectLabel(caseType)
-      ..fields['top_k'] = topK.toString()
-      ..files.add(
+      ..fields['top_k'] = topK.toString();
+    for (final photo in photos) {
+      request.files.add(
         http.MultipartFile.fromBytes(
-          'image',
-          probe,
-          filename: fileName,
+          'images',
+          photo.bytes,
+          filename: photo.fileName,
         ),
       );
+    }
     final accessToken = await tokenProvider?.call();
     if (tokenProvider != null && accessToken == null) {
       throw const RemoteRecognitionException(
@@ -129,11 +151,18 @@ class RemoteMatcher implements Matcher {
         return detail;
       }
       if (detail is Map<String, Object?>) {
+        final error = detail['error']?.toString();
         final reasons = detail['reasons'];
+        if (detail['photo_index'] != null && error != null) {
+          if (reasons is List<Object?> && reasons.isNotEmpty) {
+            return '$error ${reasons.join(' ')}';
+          }
+          return error;
+        }
         if (reasons is List<Object?> && reasons.isNotEmpty) {
           return reasons.join(', ');
         }
-        return detail['error']?.toString() ?? 'Remote recognition failed.';
+        return error ?? 'Remote recognition failed.';
       }
     } on FormatException {
       return 'Remote recognition failed (${response.statusCode}).';
