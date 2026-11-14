@@ -28,4 +28,4 @@ VOLUME ["/data"]
 EXPOSE 9000
 
 ENTRYPOINT ["/usr/local/bin/minio-entrypoint"]
-CMD ["/usr/local/bin/minio", "server", "/data"]
+CMD ["server", "/data"]
