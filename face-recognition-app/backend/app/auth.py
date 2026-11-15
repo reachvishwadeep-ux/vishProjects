@@ -60,6 +60,13 @@ def create_otp_challenge(
             detail="OTP delivery is not configured",
         )
 
+    is_app_review = settings.app_review_phone_number == phone_number
+    if is_app_review and not re.fullmatch(r"\d{6}", settings.app_review_otp_code or ""):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="review authentication is not configured",
+        )
+
     now = datetime.now(UTC)
     hour_ago = now - timedelta(hours=1)
     request_count = db.scalar(
@@ -101,23 +108,24 @@ def create_otp_challenge(
         )
 
     challenge_id = uuid.uuid4()
-    code = (
+    development_code = (
         f"{secrets.randbelow(1_000_000):06d}"
-        if settings.otp_delivery_mode == "development"
+        if settings.otp_delivery_mode == "development" and not is_app_review
         else None
     )
+    challenge_code = settings.app_review_otp_code if is_app_review else development_code
     challenge = OtpChallenge(
         id=challenge_id,
         phone_number=phone_number,
         code_hash=(
-            _otp_hash(challenge_id, phone_number, code)
-            if code is not None
+            _otp_hash(challenge_id, phone_number, challenge_code)
+            if challenge_code is not None
             else _otp_hash(challenge_id, phone_number, secrets.token_urlsafe(32))
         ),
         expires_at=now + timedelta(seconds=settings.otp_ttl_seconds),
     )
     db.add(challenge)
-    if settings.otp_delivery_mode in {"telnyx_verify", "twilio_verify"}:
+    if not is_app_review and settings.otp_delivery_mode in {"telnyx_verify", "twilio_verify"}:
         provider = settings.otp_delivery_mode
         try:
             if provider == "telnyx_verify":
@@ -143,10 +151,10 @@ def create_otp_challenge(
         db,
         "otp_requested",
         phone_number=phone_number,
-        data={"delivery_mode": settings.otp_delivery_mode},
+        data={"delivery_mode": ("app_review" if is_app_review else settings.otp_delivery_mode)},
     )
     db.commit()
-    return challenge, code
+    return challenge, development_code
 
 
 def verify_otp(

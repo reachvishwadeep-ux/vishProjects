@@ -29,6 +29,8 @@ def settings() -> SimpleNamespace:
         otp_max_requests_per_hour=5,
         otp_max_verification_attempts=5,
         otp_delivery_mode="development",
+        app_review_phone_number=None,
+        app_review_otp_code=None,
         telnyx_api_key=None,
         telnyx_verify_profile_id=None,
         twilio_account_sid=None,
@@ -226,6 +228,60 @@ def test_telnyx_verify_login(
     assert verified.status_code == 200
     assert verified.json()["account"]["phone_number"] == "+12025550100"
     assert checked == [("+12025550100", "123456")]
+
+
+def test_app_review_login_bypasses_telnyx_without_exposing_code(
+    client: TestClient,
+    monkeypatch,
+    settings: SimpleNamespace,
+) -> None:
+    settings.otp_delivery_mode = "telnyx_verify"
+    settings.app_review_phone_number = "+12025550199"
+    settings.app_review_otp_code = "654321"
+
+    def unexpected_send(phone_number: str, configured: SimpleNamespace) -> str:
+        raise AssertionError("review login must not call the SMS provider")
+
+    monkeypatch.setattr(auth, "send_telnyx_verification", unexpected_send)
+
+    requested = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+1 202 555 0199"},
+    )
+    assert requested.status_code == 202
+    challenge = requested.json()
+    assert challenge["development_code"] is None
+
+    verified = client.post(
+        "/v1/auth/otp/verify",
+        json={
+            "challenge_id": challenge["challenge_id"],
+            "phone_number": "+12025550199",
+            "code": "654321",
+        },
+    )
+    assert verified.status_code == 200
+    assert verified.json()["account"]["phone_number"] == "+12025550199"
+
+    session = client.app.dependency_overrides[get_db]()
+    event = session.query(AuditEvent).filter_by(event_type="otp_requested").one()
+    assert event.event_data["delivery_mode"] == "app_review"
+
+
+def test_app_review_login_requires_a_six_digit_code(
+    client: TestClient,
+    settings: SimpleNamespace,
+) -> None:
+    settings.otp_delivery_mode = "telnyx_verify"
+    settings.app_review_phone_number = "+12025550199"
+    settings.app_review_otp_code = "invalid"
+
+    response = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+12025550199"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "review authentication is not configured"
 
 
 def test_telnyx_rejected_code_is_counted(

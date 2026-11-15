@@ -14,6 +14,9 @@ registry.
 2. Set unique generated values for every password or secret.
 3. Set `API_DOMAIN` and `MEDIA_DOMAIN` to DNS names that resolve to the host.
 4. Set the Telnyx Verify credentials without committing `.env.cloud`.
+5. Leave `APP_REVIEW_PHONE_NUMBER` and `APP_REVIEW_OTP_CODE` empty unless Apple
+   needs a temporary review login. When enabled, use one E.164 phone number and
+   a six-digit code, then clear both values after review.
 
 ## Start
 
