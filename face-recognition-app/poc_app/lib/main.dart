@@ -116,7 +116,7 @@ class _PocAppState extends State<PocApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MatchSnap',
+      title: 'ReuniteNow',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       themeMode: ThemeMode.light,

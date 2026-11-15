@@ -84,7 +84,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Your MatchSnap profile',
+                  'Your ReuniteNow profile',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -126,7 +126,7 @@ class ProfileScreen extends StatelessWidget {
                   const _ProfileSetting(
                     icon: Icons.mail_outline_rounded,
                     title: 'Email address',
-                    subtitle: 'Not required for your MatchSnap account',
+                    subtitle: 'Not required for your ReuniteNow account',
                     value: 'Off',
                   ),
                   const Divider(height: 1, indent: 54),

@@ -303,7 +303,7 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
                           ? _error.toString()
                           : complete
                               ? 'All $photoLabel passed validation and the remote comparison finished successfully.'
-                              : 'Validating and searching $photoLabel against the opposite MatchSnap repository.',
+                              : 'Validating and searching $photoLabel against the opposite ReuniteNow repository.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: brandMuted,

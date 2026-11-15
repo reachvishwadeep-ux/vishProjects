@@ -101,7 +101,7 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
             SizedBox(height: 12),
             Text(
-              'Choose up to five photos of the same person. MatchSnap checks every photo before searching the opposite repository.',
+              'Choose up to five photos of the same person. ReuniteNow checks every photo before searching the opposite repository.',
               style: TextStyle(color: brandMuted, height: 1.5),
             ),
             SizedBox(height: 12),
@@ -145,7 +145,7 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
               const SizedBox(width: 11),
               const Text(
-                'MatchSnap',
+                'ReuniteNow',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
@@ -225,9 +225,10 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'This app matches the uploaded image against similar images '
-                  'of people who have been found. If there is a potential '
-                  'match, it will connect you with the other person.',
+                  'Using AI, this app compares uploaded photos from '
+                  'missing-person and found-person cases. If it identifies a '
+                  'potential match, it displays a confidence score and helps '
+                  'connect the people who submitted the cases.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .82),
                     height: 1.45,
@@ -381,7 +382,7 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           const SizedBox(height: 24),
           const Text(
-            'Why MatchSnap?',
+            'Why ReuniteNow?',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 11),

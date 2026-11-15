@@ -40,7 +40,14 @@ void main() {
     });
     await tester.pumpAndSettle();
 
+    expect(find.text('ReuniteNow'), findsOneWidget);
     expect(find.text('Find a missing person'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Using AI, this app compares uploaded photos from missing-person',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('I’m looking for someone'), findsOneWidget);
     expect(find.text('I found someone'), findsOneWidget);
 

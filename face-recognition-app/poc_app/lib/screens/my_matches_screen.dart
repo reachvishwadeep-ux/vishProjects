@@ -129,7 +129,7 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                 icon: Icons.manage_search_rounded,
                 title: 'No connections yet',
                 message:
-                    'MatchSnap will keep comparing missing and found cases. '
+                    'ReuniteNow will keep comparing missing and found cases. '
                     'A private update will appear here when a candidate match '
                     'is found.',
               )
