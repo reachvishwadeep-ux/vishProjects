@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
+import 'package:poc_app/connections/connection_repository.dart';
 import 'package:poc_app/app_state.dart';
 import 'package:poc_app/main.dart';
 import 'package:poc_app/matching/perceptual_matcher.dart';
@@ -131,5 +135,110 @@ void main() {
     expect(find.text('Potential match found'), findsOneWidget);
     expect(find.text('Amber Ridge'), findsOneWidget);
     expect(find.text('97%'), findsOneWidget);
+  });
+
+  testWidgets('requesting a secure connection opens that match consent page',
+      (tester) async {
+    final bytes = _jpeg();
+    final requests = <String>[];
+    final connections = ConnectionRepository(
+      baseUrl: 'https://api.example.com',
+      tokenProvider: () async => 'access-token',
+      onAuthenticationFailure: () async {},
+      client: MockClient((request) async {
+        requests.add('${request.method} ${request.url.path}');
+        return http.Response(
+          jsonEncode({
+            'results': [
+              {
+                'id': 'other-connection',
+                'role': 'missing',
+                'status': 'pending_consent',
+                'my_case_id': 'my-case',
+                'other_case_id': 'other-case',
+                'other_subject_label': 'Unrelated case',
+                'score': 0.8,
+                'image_url': null,
+                'my_consented': false,
+                'other_consented': false,
+                'my_verified_peer': false,
+                'other_verified_peer': false,
+                'unread': true,
+                'meeting_code': null,
+                'meeting_code_expires_at': null,
+                'created_at': '2026-10-01T12:00:00Z',
+              },
+              {
+                'id': 'matched-connection',
+                'role': 'missing',
+                'status': 'pending_consent',
+                'my_case_id': 'my-case',
+                'other_case_id': 'found-case',
+                'other_subject_label': 'Possible found-person case',
+                'score': 0.88,
+                'image_url': null,
+                'my_consented': false,
+                'other_consented': false,
+                'my_verified_peer': false,
+                'other_verified_peer': false,
+                'unread': true,
+                'meeting_code': null,
+                'meeting_code_expires_at': null,
+                'created_at': '2026-10-01T12:00:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: ResultScreen(
+          probe: bytes,
+          connections: connections,
+          outcome: MatchOutcome(
+            decision: Decision.match,
+            candidates: [
+              MatchCandidate(
+                image: StoredImage.remote(
+                  id: 'found-case',
+                  label: 'Found person submission',
+                  remoteUrl: null,
+                ),
+                score: 0.88,
+                structureScore: 0.88,
+                colourScore: 0.88,
+                connectionId: 'matched-connection',
+              ),
+            ],
+            matcherName: 'ArcFace (remote service)',
+            duration: const Duration(milliseconds: 12),
+            comparisons: 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Request secure connection'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Request secure connection'));
+    await tester.pumpAndSettle();
+
+    expect(requests, ['GET /v1/connections']);
+    expect(find.text('Secure connection'), findsOneWidget);
+    expect(find.text('Possible found-person case'), findsOneWidget);
+    expect(find.text('Unrelated case'), findsNothing);
+    expect(find.text('Consent to a safe meeting'), findsOneWidget);
+    expect(
+      find.text('Secure contact requests are not enabled yet.'),
+      findsNothing,
+    );
   });
 }

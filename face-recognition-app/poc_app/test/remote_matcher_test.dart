@@ -46,6 +46,7 @@ void main() {
                 'subject_label': 'Missing person submission',
                 'score': 0.88,
                 'image_url': 'https://images.example.com/candidate.jpg',
+                'connection_id': '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
               },
             ],
           },
@@ -75,6 +76,10 @@ void main() {
     expect(
       outcome.best!.image.remoteUrl,
       'https://images.example.com/candidate.jpg',
+    );
+    expect(
+      outcome.best!.connectionId,
+      '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
     );
   });
 

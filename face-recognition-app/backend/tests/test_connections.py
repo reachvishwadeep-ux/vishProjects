@@ -392,3 +392,29 @@ def test_non_participant_cannot_access_connection(
         )
 
     assert error.value.status_code == 404
+
+
+def test_connection_ids_map_each_matched_case_for_the_participant() -> None:
+    submitted_case_id = uuid.uuid4()
+    found_case_id = uuid.uuid4()
+    other_missing_case_id = uuid.uuid4()
+    first_connection_id = uuid.uuid4()
+    second_connection_id = uuid.uuid4()
+
+    class RowsDb:
+        def execute(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(
+                all=lambda: [
+                    (submitted_case_id, found_case_id, first_connection_id),
+                    (other_missing_case_id, submitted_case_id, second_connection_id),
+                ]
+            )
+
+    assert connection_service.connection_ids_for_case(
+        RowsDb(),
+        case_id=submitted_case_id,
+        account_id=uuid.uuid4(),
+    ) == {
+        found_case_id: first_connection_id,
+        other_missing_case_id: second_connection_id,
+    }

@@ -106,6 +106,29 @@ def ensure_connection_for_match(
         )
 
 
+def connection_ids_for_case(
+    db: Session,
+    *,
+    case_id: uuid.UUID,
+    account_id: uuid.UUID,
+) -> dict[uuid.UUID, uuid.UUID]:
+    rows = db.execute(
+        select(CaseMatch.missing_case_id, CaseMatch.found_case_id, MatchConnection.id)
+        .join(MatchConnection, MatchConnection.case_match_id == CaseMatch.id)
+        .where(
+            or_(CaseMatch.missing_case_id == case_id, CaseMatch.found_case_id == case_id),
+            or_(
+                MatchConnection.missing_account_id == account_id,
+                MatchConnection.found_account_id == account_id,
+            ),
+        )
+    ).all()
+    return {
+        (found_case_id if missing_case_id == case_id else missing_case_id): connection_id
+        for missing_case_id, found_case_id, connection_id in rows
+    }
+
+
 def list_connections(
     db: Session,
     account: Account,

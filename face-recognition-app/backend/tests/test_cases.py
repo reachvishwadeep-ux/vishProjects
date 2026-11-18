@@ -89,6 +89,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
 ) -> None:
     submitted_case_id = uuid.uuid4()
     candidate_case_id = uuid.uuid4()
+    connection_id = uuid.uuid4()
     authenticated_account_id = uuid.uuid4()
     captured_case_types: list[CaseType] = []
 
@@ -164,6 +165,11 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
     )
     monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
     monkeypatch.setattr(cases, "record_case_upload", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        cases,
+        "connection_ids_for_case",
+        lambda db, *, case_id, account_id: {candidate_case_id: connection_id},
+    )
 
     image = np.zeros((16, 16, 3), dtype=np.uint8)
     _, encoded = cv2.imencode(".jpg", image)
@@ -181,6 +187,7 @@ def test_submission_contract_passes_missing_role_to_remote_case_service(
     assert response.json()["photo_count"] == 1
     assert len(response.json()["qualities"]) == 1
     assert response.json()["match"]["results"][0]["case_id"] == str(candidate_case_id)
+    assert response.json()["match"]["results"][0]["connection_id"] == str(connection_id)
     assert captured_case_types == [CaseType.missing]
 
 
@@ -289,6 +296,11 @@ def test_submission_groups_multiple_photos_under_one_case(monkeypatch) -> None:
     )
     monkeypatch.setattr(cases, "search_opposite_cases", fake_search)
     monkeypatch.setattr(cases, "record_case_upload", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        cases,
+        "connection_ids_for_case",
+        lambda *args, **kwargs: {},
+    )
 
     image = np.zeros((16, 16, 3), dtype=np.uint8)
     _, encoded = cv2.imencode(".jpg", image)
@@ -312,6 +324,7 @@ def test_submission_groups_multiple_photos_under_one_case(monkeypatch) -> None:
     assert len(body["match"]["results"]) == 1
     assert body["match"]["results"][0]["score"] == pytest.approx(0.92)
     assert body["match"]["results"][0]["image_url"].endswith("/2.jpg")
+    assert body["match"]["results"][0]["connection_id"] is None
 
 
 def test_submission_rejects_more_than_five_photos(monkeypatch) -> None:

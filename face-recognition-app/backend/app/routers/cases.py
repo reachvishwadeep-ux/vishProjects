@@ -27,6 +27,7 @@ from app.case_service import (
     list_case_matches,
     search_opposite_cases,
 )
+from app.connection_service import connection_ids_for_case
 from app.db import get_db
 from app.face_engine import get_engine
 from app.images import decode_image, encode_jpeg
@@ -156,6 +157,15 @@ def submit_case(
         for face, photo in zip(faces, prepared_photos, strict=True)
     ]
     match = combine_case_search_results(search_results, top_k=bounded_top_k)
+    connection_ids = connection_ids_for_case(
+        db,
+        case_id=case.id,
+        account_id=principal.account.id,
+    )
+    match.results = [
+        candidate.model_copy(update={"connection_id": connection_ids.get(candidate.case_id)})
+        for candidate in match.results
+    ]
     for face, photo in zip(faces, prepared_photos, strict=True):
         record_case_upload(
             db,

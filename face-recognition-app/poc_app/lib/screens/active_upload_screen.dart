@@ -59,6 +59,7 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
         builder: (_) => ResultScreen(
           probe: widget.photos.first.bytes,
           outcome: outcome,
+          connections: widget.state.connections,
         ),
       ),
     );

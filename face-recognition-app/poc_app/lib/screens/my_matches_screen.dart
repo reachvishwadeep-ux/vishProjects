@@ -151,6 +151,100 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
   }
 }
 
+class ConnectionDetailScreen extends StatefulWidget {
+  const ConnectionDetailScreen({
+    super.key,
+    required this.repository,
+    required this.connectionId,
+  });
+
+  final ConnectionRepository repository;
+  final String connectionId;
+
+  @override
+  State<ConnectionDetailScreen> createState() => _ConnectionDetailScreenState();
+}
+
+class _ConnectionDetailScreenState extends State<ConnectionDetailScreen> {
+  MatchConnection? _connection;
+  String? _error;
+  var _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final connections = await widget.repository.list();
+      if (!mounted) return;
+      final matches =
+          connections.where((item) => item.id == widget.connectionId);
+      setState(() => _connection = matches.isEmpty ? null : matches.first);
+    } on ConnectionException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final connection = _connection;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Secure connection')),
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+            children: [
+              const _PrivacyBanner(),
+              const SizedBox(height: 18),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 50),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                _StateCard(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Could not load this connection',
+                  message: _error!,
+                  actionLabel: 'Try again',
+                  onAction: _load,
+                )
+              else if (connection == null)
+                const _StateCard(
+                  icon: Icons.manage_search_rounded,
+                  title: 'Connection not available',
+                  message:
+                      'This connection is no longer available. Check My Matches '
+                      'for current updates.',
+                )
+              else
+                _ConnectionCard(
+                  connection: connection,
+                  repository: widget.repository,
+                  onChanged: (updated) => setState(() => _connection = updated),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PrivacyBanner extends StatelessWidget {
   const _PrivacyBanner();
 

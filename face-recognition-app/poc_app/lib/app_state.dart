@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'connections/connection_repository.dart';
 import 'matching/matcher.dart';
 import 'models.dart';
 import 'repository/gallery_repository.dart';
@@ -11,10 +12,12 @@ class AppState extends ChangeNotifier {
   AppState({
     required this.repository,
     required this.matcher,
+    this.connections,
   });
 
   final GalleryRepository repository;
   final Matcher matcher;
+  final ConnectionRepository? connections;
 
   List<StoredImage> _gallery = [];
   bool _initialized = false;

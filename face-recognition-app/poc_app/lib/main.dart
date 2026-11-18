@@ -36,6 +36,7 @@ void main() {
       installations: installations,
       state: AppState(
         repository: GalleryRepository(),
+        connections: connections,
         matcher: RemoteMatcher(
           baseUrl: Config.apiBaseUrl,
           tokenProvider: authRepository.validAccessToken,

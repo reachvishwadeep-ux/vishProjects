@@ -115,6 +115,7 @@ class RemoteMatcher extends Matcher {
             score: (item['score']! as num).toDouble(),
             structureScore: (item['score']! as num).toDouble(),
             colourScore: (item['score']! as num).toDouble(),
+            connectionId: item['connection_id'] as String?,
           ),
         )
         .toList();
