@@ -39,8 +39,13 @@ class Settings(BaseSettings):
     otp_max_requests_per_hour: int = 5
     otp_max_verification_attempts: int = 5
     otp_delivery_mode: str = "development"
+    app_review_phone_number: str | None = None
+    app_review_otp_code: str | None = None
     telnyx_api_key: str | None = None
     telnyx_verify_profile_id: str | None = None
+    match_alert_sms_enabled: bool = False
+    telnyx_match_alert_messaging_profile_id: str | None = None
+    telnyx_match_alert_from: str | None = None
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_verify_service_sid: str | None = None

@@ -1,9 +1,11 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from app.config import get_settings
@@ -15,6 +17,7 @@ from app.routers import audit, auth, cases, connections, faces
 from app.storage import get_store
 
 logger = logging.getLogger(__name__)
+PRIVACY_POLICY_PATH = Path(__file__).with_name("static") / "privacy.html"
 
 
 @asynccontextmanager
@@ -53,3 +56,8 @@ def health() -> dict[str, object]:
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
     return {"status": "ok", "model_tag": get_engine().model_tag}
+
+
+@app.get("/privacy", include_in_schema=False, response_class=FileResponse)
+def privacy_policy() -> FileResponse:
+    return FileResponse(PRIVACY_POLICY_PATH, media_type="text/html")

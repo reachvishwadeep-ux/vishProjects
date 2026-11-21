@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../connections/connection_repository.dart';
 import '../models.dart';
+import 'my_matches_screen.dart';
 import '../theme.dart';
 
 class ResultScreen extends StatefulWidget {
@@ -11,10 +13,12 @@ class ResultScreen extends StatefulWidget {
     super.key,
     required this.probe,
     required this.outcome,
+    this.connections,
   });
 
   final Uint8List probe;
   final MatchOutcome outcome;
+  final ConnectionRepository? connections;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -29,10 +33,26 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
-  void _prototypeAction() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Secure contact requests are not enabled yet.'),
+  void _openSecureConnection() {
+    final connectionId = widget.outcome.best?.connectionId;
+    final repository = widget.connections;
+    if (connectionId == null || repository == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'A private connection opens once this match is confirmed. '
+            'Check My Matches for updates.',
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ConnectionDetailScreen(
+          repository: repository,
+          connectionId: connectionId,
+        ),
       ),
     );
   }
@@ -57,7 +77,7 @@ class _ResultScreenState extends State<ResultScreen> {
             : _MatchFoundResult(
                 probe: widget.probe,
                 outcome: widget.outcome,
-                onChat: _prototypeAction,
+                onChat: _openSecureConnection,
               ),
       ),
     );
@@ -277,7 +297,7 @@ class _MatchFoundResult extends StatelessWidget {
                 ),
                 const Divider(height: 26),
                 const Text(
-                  'Contact information remains hidden until a controlled connection workflow is approved.',
+                  'Contact details stay hidden. Both people must consent before one-time meeting codes appear.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: brandMuted,

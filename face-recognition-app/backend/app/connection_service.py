@@ -3,6 +3,7 @@ import hmac
 import re
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
@@ -12,6 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.audit_service import record_event, record_repeated_failure_risk, record_risk_alert
 from app.config import get_settings
+from app.match_alert_delivery import (
+    MatchAlertDeliveryError,
+    send_telnyx_match_alert,
+)
 from app.models import (
     Account,
     AccountNotification,
@@ -32,18 +37,24 @@ from app.storage import get_store
 MEETING_CODE_PATTERN = re.compile(r"^\d{6}$")
 
 
+@dataclass(frozen=True)
+class MatchSmsAlert:
+    connection_id: uuid.UUID
+    account_id: uuid.UUID
+
+
 def ensure_connection_for_match(
     db: Session,
     match: CaseMatch,
     *,
     source: str,
-) -> None:
+) -> list[MatchSmsAlert]:
     if match.decision != "match":
-        return
+        return []
     missing_owner = db.get(CaseAccount, match.missing_case_id)
     found_owner = db.get(CaseAccount, match.found_case_id)
     if missing_owner is None or found_owner is None:
-        return
+        return []
     if missing_owner.account_id == found_owner.account_id:
         record_risk_alert(
             db,
@@ -56,7 +67,7 @@ def ensure_connection_for_match(
                 "found_case_id": str(match.found_case_id),
             },
         )
-        return
+        return []
 
     connection_id = db.scalar(
         insert(MatchConnection)
@@ -75,7 +86,8 @@ def ensure_connection_for_match(
             select(MatchConnection.id).where(MatchConnection.case_match_id == match.id)
         )
     if connection_id is None:
-        return
+        return []
+    account_ids = (missing_owner.account_id, found_owner.account_id)
     if connection_created:
         record_event(
             db,
@@ -93,8 +105,16 @@ def ensure_connection_for_match(
                 "source": source,
             },
         )
+        if get_settings().match_alert_sms_enabled:
+            for account_id in account_ids:
+                record_event(
+                    db,
+                    "match_sms_pending",
+                    account_id=account_id,
+                    data={"connection_id": str(connection_id)},
+                )
 
-    for account_id in (missing_owner.account_id, found_owner.account_id):
+    for account_id in account_ids:
         db.execute(
             insert(AccountNotification)
             .values(
@@ -104,6 +124,130 @@ def ensure_connection_for_match(
             )
             .on_conflict_do_nothing(constraint="account_notification_event_key")
         )
+    if not get_settings().match_alert_sms_enabled:
+        return []
+    if connection_created:
+        return [
+            MatchSmsAlert(connection_id=connection_id, account_id=account_id)
+            for account_id in account_ids
+        ]
+    return _pending_match_sms_alerts(db, connection_id, account_ids)
+
+
+def _pending_match_sms_alerts(
+    db: Session,
+    connection_id: uuid.UUID,
+    account_ids: tuple[uuid.UUID, uuid.UUID],
+) -> list[MatchSmsAlert]:
+    events = db.scalars(
+        select(AuditEvent).where(
+            AuditEvent.account_id.in_(account_ids),
+            AuditEvent.event_type.in_(
+                (
+                    "match_sms_pending",
+                    "match_sms_sent",
+                    "match_sms_delivery_skipped",
+                )
+            ),
+        )
+    ).all()
+    pending_accounts = {
+        event.account_id
+        for event in events
+        if event.event_type == "match_sms_pending"
+        and event.event_data.get("connection_id") == str(connection_id)
+    }
+    completed_accounts = {
+        event.account_id
+        for event in events
+        if event.event_type in {"match_sms_sent", "match_sms_delivery_skipped"}
+        and event.event_data.get("connection_id") == str(connection_id)
+    }
+    return [
+        MatchSmsAlert(connection_id=connection_id, account_id=account_id)
+        for account_id in account_ids
+        if account_id in pending_accounts and account_id not in completed_accounts
+    ]
+
+
+def send_match_sms_alerts(
+    db: Session,
+    alerts: list[MatchSmsAlert],
+) -> None:
+    settings = get_settings()
+    if not settings.match_alert_sms_enabled or not alerts:
+        return
+
+    for alert in alerts:
+        account = db.get(Account, alert.account_id)
+        if account is None or not account.is_active:
+            record_event(
+                db,
+                "match_sms_delivery_skipped",
+                account_id=alert.account_id,
+                data={
+                    "connection_id": str(alert.connection_id),
+                    "reason": "inactive_or_missing_account",
+                },
+            )
+            continue
+        try:
+            idempotency_key = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"reunitenow:match-alert:{alert.connection_id}:{alert.account_id}",
+                )
+            )
+            provider_message_id = send_telnyx_match_alert(
+                account.phone_number,
+                idempotency_key=idempotency_key,
+                settings=settings,
+            )
+        except MatchAlertDeliveryError:
+            record_event(
+                db,
+                "match_sms_delivery_failed",
+                account_id=alert.account_id,
+                data={
+                    "connection_id": str(alert.connection_id),
+                    "provider": "telnyx",
+                },
+            )
+            continue
+        record_event(
+            db,
+            "match_sms_sent",
+            account_id=alert.account_id,
+            data={
+                "connection_id": str(alert.connection_id),
+                "provider": "telnyx",
+                "provider_message_id": provider_message_id,
+            },
+        )
+    db.commit()
+
+
+def connection_ids_for_case(
+    db: Session,
+    *,
+    case_id: uuid.UUID,
+    account_id: uuid.UUID,
+) -> dict[uuid.UUID, uuid.UUID]:
+    rows = db.execute(
+        select(CaseMatch.missing_case_id, CaseMatch.found_case_id, MatchConnection.id)
+        .join(MatchConnection, MatchConnection.case_match_id == CaseMatch.id)
+        .where(
+            or_(CaseMatch.missing_case_id == case_id, CaseMatch.found_case_id == case_id),
+            or_(
+                MatchConnection.missing_account_id == account_id,
+                MatchConnection.found_account_id == account_id,
+            ),
+        )
+    ).all()
+    return {
+        (found_case_id if missing_case_id == case_id else missing_case_id): connection_id
+        for missing_case_id, found_case_id, connection_id in rows
+    }
 
 
 def list_connections(

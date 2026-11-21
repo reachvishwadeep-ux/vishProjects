@@ -61,6 +61,7 @@ class CaseCandidate(BaseModel):
     subject_label: str
     score: float
     image_url: str | None = None
+    connection_id: uuid.UUID | None = None
 
 
 class CaseSearchResult(BaseModel):
@@ -73,7 +74,9 @@ class CaseSubmissionResponse(BaseModel):
     case_id: uuid.UUID
     case_type: CaseType
     subject_label: str
+    photo_count: int
     quality: QualityReport
+    qualities: list[QualityReport]
     match: CaseSearchResult
 
 

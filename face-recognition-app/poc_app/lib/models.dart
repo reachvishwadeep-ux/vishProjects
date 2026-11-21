@@ -69,12 +69,14 @@ class MatchCandidate {
     required this.score,
     required this.structureScore,
     required this.colourScore,
+    this.connectionId,
   });
 
   final StoredImage image;
   final double score;
   final double structureScore;
   final double colourScore;
+  final String? connectionId;
 }
 
 class MatchOutcome {

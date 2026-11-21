@@ -36,6 +36,7 @@ void main() {
       installations: installations,
       state: AppState(
         repository: GalleryRepository(),
+        connections: connections,
         matcher: RemoteMatcher(
           baseUrl: Config.apiBaseUrl,
           tokenProvider: authRepository.validAccessToken,
@@ -116,7 +117,7 @@ class _PocAppState extends State<PocApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MatchSnap',
+      title: 'ReuniteNow',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       themeMode: ThemeMode.light,

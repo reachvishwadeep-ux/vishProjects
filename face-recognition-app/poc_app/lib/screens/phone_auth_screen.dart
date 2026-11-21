@@ -93,7 +93,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                 const SizedBox(height: 10),
                 Text(
                   _challenge == null
-                      ? 'MatchSnap uses your phone number to protect photo submissions and matches.'
+                      ? 'ReuniteNow uses your phone number to protect photo submissions and matches.'
                       : 'Use the six-digit code sent for ${_phoneController.text}.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
