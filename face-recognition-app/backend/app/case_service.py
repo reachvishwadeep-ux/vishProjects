@@ -11,7 +11,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.connection_service import ensure_connection_for_match
+from app.connection_service import (
+    MatchSmsAlert,
+    ensure_connection_for_match,
+    send_match_sms_alerts,
+)
 from app.face_engine import DetectedFace, get_engine
 from app.models import CaseAccount, CaseFace, CaseMatch, CaseRecord
 from app.schemas import CaseCandidate, CaseMatchesResponse, CaseSearchResult, CaseType
@@ -293,6 +297,7 @@ def _persist_candidates(
 ) -> None:
     settings = get_settings()
     candidate_pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
+    sms_alerts: list[MatchSmsAlert] = []
     for hit in hits:
         if hit.score < settings.review_threshold:
             continue
@@ -339,8 +344,9 @@ def _persist_candidates(
             )
         )
         if match is not None:
-            ensure_connection_for_match(db, match, source=source)
+            sms_alerts.extend(ensure_connection_for_match(db, match, source=source))
     db.commit()
+    send_match_sms_alerts(db, sms_alerts)
 
 
 def _to_vector_literal(embedding: np.ndarray) -> str:

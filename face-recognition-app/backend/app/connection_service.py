@@ -3,6 +3,7 @@ import hmac
 import re
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
@@ -12,6 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.audit_service import record_event, record_repeated_failure_risk, record_risk_alert
 from app.config import get_settings
+from app.match_alert_delivery import (
+    MatchAlertDeliveryError,
+    send_telnyx_match_alert,
+)
 from app.models import (
     Account,
     AccountNotification,
@@ -32,18 +37,24 @@ from app.storage import get_store
 MEETING_CODE_PATTERN = re.compile(r"^\d{6}$")
 
 
+@dataclass(frozen=True)
+class MatchSmsAlert:
+    connection_id: uuid.UUID
+    account_id: uuid.UUID
+
+
 def ensure_connection_for_match(
     db: Session,
     match: CaseMatch,
     *,
     source: str,
-) -> None:
+) -> list[MatchSmsAlert]:
     if match.decision != "match":
-        return
+        return []
     missing_owner = db.get(CaseAccount, match.missing_case_id)
     found_owner = db.get(CaseAccount, match.found_case_id)
     if missing_owner is None or found_owner is None:
-        return
+        return []
     if missing_owner.account_id == found_owner.account_id:
         record_risk_alert(
             db,
@@ -56,7 +67,7 @@ def ensure_connection_for_match(
                 "found_case_id": str(match.found_case_id),
             },
         )
-        return
+        return []
 
     connection_id = db.scalar(
         insert(MatchConnection)
@@ -75,7 +86,7 @@ def ensure_connection_for_match(
             select(MatchConnection.id).where(MatchConnection.case_match_id == match.id)
         )
     if connection_id is None:
-        return
+        return []
     if connection_created:
         record_event(
             db,
@@ -104,6 +115,69 @@ def ensure_connection_for_match(
             )
             .on_conflict_do_nothing(constraint="account_notification_event_key")
         )
+    if not connection_created:
+        return []
+    return [
+        MatchSmsAlert(connection_id=connection_id, account_id=missing_owner.account_id),
+        MatchSmsAlert(connection_id=connection_id, account_id=found_owner.account_id),
+    ]
+
+
+def send_match_sms_alerts(
+    db: Session,
+    alerts: list[MatchSmsAlert],
+) -> None:
+    settings = get_settings()
+    if not settings.match_alert_sms_enabled or not alerts:
+        return
+
+    for alert in alerts:
+        account = db.get(Account, alert.account_id)
+        if account is None or not account.is_active:
+            record_event(
+                db,
+                "match_sms_delivery_skipped",
+                account_id=alert.account_id,
+                data={
+                    "connection_id": str(alert.connection_id),
+                    "reason": "inactive_or_missing_account",
+                },
+            )
+            continue
+        try:
+            idempotency_key = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"reunitenow:match-alert:{alert.connection_id}:{alert.account_id}",
+                )
+            )
+            provider_message_id = send_telnyx_match_alert(
+                account.phone_number,
+                idempotency_key=idempotency_key,
+                settings=settings,
+            )
+        except MatchAlertDeliveryError:
+            record_event(
+                db,
+                "match_sms_delivery_failed",
+                account_id=alert.account_id,
+                data={
+                    "connection_id": str(alert.connection_id),
+                    "provider": "telnyx",
+                },
+            )
+            continue
+        record_event(
+            db,
+            "match_sms_sent",
+            account_id=alert.account_id,
+            data={
+                "connection_id": str(alert.connection_id),
+                "provider": "telnyx",
+                "provider_message_id": provider_message_id,
+            },
+        )
+    db.commit()
 
 
 def connection_ids_for_case(

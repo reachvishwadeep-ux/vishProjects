@@ -332,7 +332,7 @@ def test_new_match_audit_links_both_photos_and_matching_source() -> None:
 
     db = MatchDb()
 
-    connection_service.ensure_connection_for_match(
+    alerts = connection_service.ensure_connection_for_match(
         db,
         match,
         source="reconciliation",
@@ -343,6 +343,249 @@ def test_new_match_audit_links_both_photos_and_matching_source() -> None:
     assert event.event_data["missing_face_id"] == str(match.missing_face_id)
     assert event.event_data["found_face_id"] == str(match.found_face_id)
     assert event.event_data["source"] == "reconciliation"
+    assert {(alert.connection_id, alert.account_id) for alert in alerts} == {
+        (connection_id, missing_account_id),
+        (connection_id, found_account_id),
+    }
+
+
+def test_existing_connection_does_not_send_duplicate_sms_alerts() -> None:
+    missing_account_id = uuid.uuid4()
+    found_account_id = uuid.uuid4()
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=uuid.uuid4(),
+        found_case_id=uuid.uuid4(),
+        missing_face_id=uuid.uuid4(),
+        found_face_id=uuid.uuid4(),
+        score=0.84,
+        decision="match",
+        model_tag="buffalo_l",
+    )
+    connection_id = uuid.uuid4()
+
+    class ExistingConnectionDb:
+        def __init__(self) -> None:
+            self.scalar_calls = 0
+            self.events: list[AuditEvent] = []
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is CaseAccount and object_id == match.missing_case_id:
+                return CaseAccount(
+                    case_id=match.missing_case_id,
+                    account_id=missing_account_id,
+                )
+            if model is CaseAccount and object_id == match.found_case_id:
+                return CaseAccount(
+                    case_id=match.found_case_id,
+                    account_id=found_account_id,
+                )
+            return None
+
+        def scalar(self, statement: object) -> uuid.UUID | None:
+            self.scalar_calls += 1
+            return None if self.scalar_calls == 1 else connection_id
+
+        def execute(self, statement: object) -> None:
+            return None
+
+        def add(self, value: AuditEvent) -> None:
+            self.events.append(value)
+
+    db = ExistingConnectionDb()
+
+    alerts = connection_service.ensure_connection_for_match(
+        db,
+        match,
+        source="reconciliation",
+    )
+
+    assert alerts == []
+    assert db.events == []
+
+
+def test_match_sms_alerts_remain_disabled_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DisabledDb:
+        def get(self, model: type[object], object_id: uuid.UUID) -> object:
+            raise AssertionError("disabled alerts must not load account data")
+
+        def commit(self) -> None:
+            raise AssertionError("disabled alerts must not create audit data")
+
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(match_alert_sms_enabled=False),
+    )
+
+    connection_service.send_match_sms_alerts(
+        DisabledDb(),
+        [
+            connection_service.MatchSmsAlert(
+                connection_id=uuid.uuid4(),
+                account_id=uuid.uuid4(),
+            )
+        ],
+    )
+
+
+def test_match_sms_alerts_are_idempotent_and_privacy_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection_id = uuid.uuid4()
+    accounts = [
+        Account(
+            id=uuid.uuid4(),
+            phone_number="+919000000001",
+            is_active=True,
+        ),
+        Account(
+            id=uuid.uuid4(),
+            phone_number="+919000000002",
+            is_active=True,
+        ),
+    ]
+    sent: list[tuple[str, str]] = []
+
+    class AlertDb:
+        def __init__(self) -> None:
+            self.events: list[AuditEvent] = []
+            self.commits = 0
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is Account:
+                return next(
+                    (account for account in accounts if account.id == object_id),
+                    None,
+                )
+            return None
+
+        def add(self, value: AuditEvent) -> None:
+            self.events.append(value)
+
+        def commit(self) -> None:
+            self.commits += 1
+
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+    )
+
+    def send(phone_number: str, *, idempotency_key: str, settings: object) -> str:
+        sent.append((phone_number, idempotency_key))
+        return f"provider-{len(sent)}"
+
+    monkeypatch.setattr(connection_service, "send_telnyx_match_alert", send)
+    db = AlertDb()
+    alerts = [
+        connection_service.MatchSmsAlert(
+            connection_id=connection_id,
+            account_id=account.id,
+        )
+        for account in accounts
+    ]
+
+    connection_service.send_match_sms_alerts(db, alerts)
+
+    assert sent == [
+        (
+            accounts[0].phone_number,
+            str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"reunitenow:match-alert:{connection_id}:{accounts[0].id}",
+                )
+            ),
+        ),
+        (
+            accounts[1].phone_number,
+            str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"reunitenow:match-alert:{connection_id}:{accounts[1].id}",
+                )
+            ),
+        ),
+    ]
+    assert [event.event_type for event in db.events] == [
+        "match_sms_sent",
+        "match_sms_sent",
+    ]
+    assert all("phone" not in str(event.event_data).lower() for event in db.events)
+    assert db.commits == 1
+
+
+def test_match_sms_failure_does_not_block_other_alerts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection_id = uuid.uuid4()
+    accounts = [
+        Account(
+            id=uuid.uuid4(),
+            phone_number="+919000000001",
+            is_active=True,
+        ),
+        Account(
+            id=uuid.uuid4(),
+            phone_number="+919000000002",
+            is_active=True,
+        ),
+    ]
+
+    class AlertDb:
+        def __init__(self) -> None:
+            self.events: list[AuditEvent] = []
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is Account:
+                return next(
+                    (account for account in accounts if account.id == object_id),
+                    None,
+                )
+            return None
+
+        def add(self, value: AuditEvent) -> None:
+            self.events.append(value)
+
+        def commit(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+    )
+    calls = 0
+
+    def send(phone_number: str, *, idempotency_key: str, settings: object) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise connection_service.MatchAlertDeliveryError("provider failure")
+        return "provider-success"
+
+    monkeypatch.setattr(connection_service, "send_telnyx_match_alert", send)
+    db = AlertDb()
+
+    connection_service.send_match_sms_alerts(
+        db,
+        [
+            connection_service.MatchSmsAlert(
+                connection_id=connection_id,
+                account_id=account.id,
+            )
+            for account in accounts
+        ],
+    )
+
+    assert calls == 2
+    assert [event.event_type for event in db.events] == [
+        "match_sms_delivery_failed",
+        "match_sms_sent",
+    ]
 
 
 def test_withdrawing_consent_revokes_meeting_codes(

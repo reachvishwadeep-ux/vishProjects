@@ -17,6 +17,12 @@ registry.
 5. Leave `APP_REVIEW_PHONE_NUMBER` and `APP_REVIEW_OTP_CODE` empty unless Apple
    needs a temporary review login. When enabled, use one E.164 phone number and
    a six-digit code, then clear both values after review.
+6. Leave `MATCH_ALERT_SMS_ENABLED=false` until an SMS-capable Telnyx sender is
+   assigned to a messaging profile. Set
+   `TELNYX_MATCH_ALERT_MESSAGING_PROFILE_ID` and
+   `TELNYX_MATCH_ALERT_FROM` before enabling it. Match alerts contain only
+   `Potential match—open ReuniteNow.` and never include case data, scores,
+   photos, phone numbers, or meeting codes.
 
 ## Start
 
