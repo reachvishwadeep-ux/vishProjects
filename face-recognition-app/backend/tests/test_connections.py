@@ -289,7 +289,9 @@ def test_incorrect_code_is_rejected_and_audited(
     assert db.audit_events[-1].event_type == "meeting_code_rejected"
 
 
-def test_new_match_audit_links_both_photos_and_matching_source() -> None:
+def test_new_match_audit_links_both_photos_and_matching_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     missing_account_id = uuid.uuid4()
     found_account_id = uuid.uuid4()
     match = CaseMatch(
@@ -303,6 +305,11 @@ def test_new_match_audit_links_both_photos_and_matching_source() -> None:
         model_tag="buffalo_l",
     )
     connection_id = uuid.uuid4()
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+    )
 
     class MatchDb:
         def __init__(self) -> None:
@@ -349,7 +356,9 @@ def test_new_match_audit_links_both_photos_and_matching_source() -> None:
     }
 
 
-def test_existing_connection_does_not_send_duplicate_sms_alerts() -> None:
+def test_existing_connection_does_not_send_duplicate_sms_alerts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     missing_account_id = uuid.uuid4()
     found_account_id = uuid.uuid4()
     match = CaseMatch(
@@ -363,6 +372,26 @@ def test_existing_connection_does_not_send_duplicate_sms_alerts() -> None:
         model_tag="buffalo_l",
     )
     connection_id = uuid.uuid4()
+    sent_events = [
+        AuditEvent(
+            account_id=account_id,
+            event_type="match_sms_pending",
+            event_data={"connection_id": str(connection_id)},
+        )
+        for account_id in (missing_account_id, found_account_id)
+    ] + [
+        AuditEvent(
+            account_id=account_id,
+            event_type="match_sms_sent",
+            event_data={"connection_id": str(connection_id)},
+        )
+        for account_id in (missing_account_id, found_account_id)
+    ]
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+    )
 
     class ExistingConnectionDb:
         def __init__(self) -> None:
@@ -389,6 +418,9 @@ def test_existing_connection_does_not_send_duplicate_sms_alerts() -> None:
         def execute(self, statement: object) -> None:
             return None
 
+        def scalars(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(all=lambda: sent_events)
+
         def add(self, value: AuditEvent) -> None:
             self.events.append(value)
 
@@ -402,6 +434,85 @@ def test_existing_connection_does_not_send_duplicate_sms_alerts() -> None:
 
     assert alerts == []
     assert db.events == []
+
+
+def test_failed_match_sms_is_retried_during_reconciliation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_account_id = uuid.uuid4()
+    found_account_id = uuid.uuid4()
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=uuid.uuid4(),
+        found_case_id=uuid.uuid4(),
+        missing_face_id=uuid.uuid4(),
+        found_face_id=uuid.uuid4(),
+        score=0.84,
+        decision="match",
+        model_tag="buffalo_l",
+    )
+    connection_id = uuid.uuid4()
+    pending_events = [
+        AuditEvent(
+            account_id=account_id,
+            event_type="match_sms_pending",
+            event_data={"connection_id": str(connection_id)},
+        )
+        for account_id in (missing_account_id, found_account_id)
+    ]
+    pending_events.append(
+        AuditEvent(
+            account_id=missing_account_id,
+            event_type="match_sms_delivery_failed",
+            event_data={"connection_id": str(connection_id)},
+        )
+    )
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+    )
+
+    class RetryDb:
+        def __init__(self) -> None:
+            self.scalar_calls = 0
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is CaseAccount and object_id == match.missing_case_id:
+                return CaseAccount(
+                    case_id=match.missing_case_id,
+                    account_id=missing_account_id,
+                )
+            if model is CaseAccount and object_id == match.found_case_id:
+                return CaseAccount(
+                    case_id=match.found_case_id,
+                    account_id=found_account_id,
+                )
+            return None
+
+        def scalar(self, statement: object) -> uuid.UUID | None:
+            self.scalar_calls += 1
+            return None if self.scalar_calls == 1 else connection_id
+
+        def execute(self, statement: object) -> None:
+            return None
+
+        def scalars(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(all=lambda: pending_events)
+
+        def add(self, value: AuditEvent) -> None:
+            return None
+
+    alerts = connection_service.ensure_connection_for_match(
+        RetryDb(),
+        match,
+        source="reconciliation",
+    )
+
+    assert {alert.account_id for alert in alerts} == {
+        missing_account_id,
+        found_account_id,
+    }
 
 
 def test_match_sms_alerts_remain_disabled_by_default(

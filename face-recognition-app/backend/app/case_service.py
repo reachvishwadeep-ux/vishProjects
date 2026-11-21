@@ -297,7 +297,7 @@ def _persist_candidates(
 ) -> None:
     settings = get_settings()
     candidate_pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
-    sms_alerts: list[MatchSmsAlert] = []
+    sms_alerts: dict[tuple[uuid.UUID, uuid.UUID], MatchSmsAlert] = {}
     for hit in hits:
         if hit.score < settings.review_threshold:
             continue
@@ -344,9 +344,10 @@ def _persist_candidates(
             )
         )
         if match is not None:
-            sms_alerts.extend(ensure_connection_for_match(db, match, source=source))
+            for alert in ensure_connection_for_match(db, match, source=source):
+                sms_alerts[(alert.connection_id, alert.account_id)] = alert
     db.commit()
-    send_match_sms_alerts(db, sms_alerts)
+    send_match_sms_alerts(db, list(sms_alerts.values()))
 
 
 def _to_vector_literal(embedding: np.ndarray) -> str:

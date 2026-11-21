@@ -87,6 +87,7 @@ def ensure_connection_for_match(
         )
     if connection_id is None:
         return []
+    account_ids = (missing_owner.account_id, found_owner.account_id)
     if connection_created:
         record_event(
             db,
@@ -104,8 +105,16 @@ def ensure_connection_for_match(
                 "source": source,
             },
         )
+        if get_settings().match_alert_sms_enabled:
+            for account_id in account_ids:
+                record_event(
+                    db,
+                    "match_sms_pending",
+                    account_id=account_id,
+                    data={"connection_id": str(connection_id)},
+                )
 
-    for account_id in (missing_owner.account_id, found_owner.account_id):
+    for account_id in account_ids:
         db.execute(
             insert(AccountNotification)
             .values(
@@ -115,11 +124,49 @@ def ensure_connection_for_match(
             )
             .on_conflict_do_nothing(constraint="account_notification_event_key")
         )
-    if not connection_created:
+    if not get_settings().match_alert_sms_enabled:
         return []
+    if connection_created:
+        return [
+            MatchSmsAlert(connection_id=connection_id, account_id=account_id)
+            for account_id in account_ids
+        ]
+    return _pending_match_sms_alerts(db, connection_id, account_ids)
+
+
+def _pending_match_sms_alerts(
+    db: Session,
+    connection_id: uuid.UUID,
+    account_ids: tuple[uuid.UUID, uuid.UUID],
+) -> list[MatchSmsAlert]:
+    events = db.scalars(
+        select(AuditEvent).where(
+            AuditEvent.account_id.in_(account_ids),
+            AuditEvent.event_type.in_(
+                (
+                    "match_sms_pending",
+                    "match_sms_sent",
+                    "match_sms_delivery_skipped",
+                )
+            ),
+        )
+    ).all()
+    pending_accounts = {
+        event.account_id
+        for event in events
+        if event.event_type == "match_sms_pending"
+        and event.event_data.get("connection_id") == str(connection_id)
+    }
+    completed_accounts = {
+        event.account_id
+        for event in events
+        if event.event_type in {"match_sms_sent", "match_sms_delivery_skipped"}
+        and event.event_data.get("connection_id") == str(connection_id)
+    }
     return [
-        MatchSmsAlert(connection_id=connection_id, account_id=missing_owner.account_id),
-        MatchSmsAlert(connection_id=connection_id, account_id=found_owner.account_id),
+        MatchSmsAlert(connection_id=connection_id, account_id=account_id)
+        for account_id in account_ids
+        if account_id in pending_accounts and account_id not in completed_accounts
     ]
 
 
