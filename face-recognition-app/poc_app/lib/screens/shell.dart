@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../auth/auth_controller.dart';
 import '../connections/connection_repository.dart';
+import '../notifications/push_notification_controller.dart';
 import 'gallery_screen.dart';
 import 'match_screen.dart';
 import 'my_matches_screen.dart';
@@ -14,11 +15,13 @@ class AppShell extends StatefulWidget {
     required this.state,
     this.auth,
     this.connections,
+    this.pushNotifications,
   });
 
   final AppState state;
   final AuthController? auth;
   final ConnectionRepository? connections;
+  final PushNotificationController? pushNotifications;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -26,6 +29,44 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   var _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.pushNotifications?.addListener(_handlePushNotification);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handlePushNotification();
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.pushNotifications?.removeListener(_handlePushNotification);
+    super.dispose();
+  }
+
+  void _handlePushNotification() {
+    if (!mounted) return;
+    final controller = widget.pushNotifications;
+    if (controller == null) return;
+    if (controller.takeForegroundAlert()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Potential match—open ReuniteNow.')),
+      );
+    }
+    final connectionId = controller.takePendingConnectionId();
+    final repository = widget.connections;
+    if (connectionId == null || repository == null) return;
+    setState(() => _index = 1);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ConnectionDetailScreen(
+          repository: repository,
+          connectionId: connectionId,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

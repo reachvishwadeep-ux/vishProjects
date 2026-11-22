@@ -68,6 +68,33 @@ class InstallationRepository {
     );
   }
 
+  Future<void> registerPush({
+    required String? fid,
+    required bool enabled,
+  }) async {
+    final token = await tokenProvider?.call();
+    if (token == null) {
+      return;
+    }
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/v1/audit/installations/push'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'installation_id': await installationId(),
+            'fid': fid,
+            'enabled': enabled,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw InstallationRegistrationException(response.statusCode);
+    }
+  }
+
   Future<void> _send(
     String path, {
     Map<String, String>? headers,

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from app.config import get_settings
-from app.db import engine
+from app.db import engine, ensure_runtime_schema
 from app.face_engine import get_engine
 from app.models import Base
 from app.reconciliation import reconciliation_loop, stop_reconciliation
@@ -23,6 +23,7 @@ PRIVACY_POLICY_PATH = Path(__file__).with_name("static") / "privacy.html"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
+    ensure_runtime_schema()
     get_engine()
     get_store().ensure_bucket()
     reconciliation_task = None

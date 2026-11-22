@@ -101,6 +101,9 @@ class AppInstallation(Base):
         DateTime(timezone=True), server_default=func.now(), index=True
     )
     last_authenticated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    push_fid: Mapped[str | None] = mapped_column(String(255), unique=True)
+    push_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    push_fid_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 

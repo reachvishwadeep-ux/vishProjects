@@ -13,19 +13,21 @@ from sqlalchemy.orm import Session
 
 from app.audit_service import record_event, record_repeated_failure_risk, record_risk_alert
 from app.config import get_settings
-from app.match_alert_delivery import (
-    MatchAlertDeliveryError,
-    send_telnyx_match_alert,
-)
 from app.models import (
     Account,
     AccountNotification,
+    AppInstallation,
     AuditEvent,
     CaseAccount,
     CaseFace,
     CaseMatch,
     CaseRecord,
     MatchConnection,
+)
+from app.push_delivery import (
+    InvalidPushFidError,
+    PushDeliveryError,
+    send_firebase_match_alert,
 )
 from app.schemas import (
     ConnectionListResponse,
@@ -38,9 +40,10 @@ MEETING_CODE_PATTERN = re.compile(r"^\d{6}$")
 
 
 @dataclass(frozen=True)
-class MatchSmsAlert:
+class MatchPushAlert:
     connection_id: uuid.UUID
     account_id: uuid.UUID
+    installation_id: uuid.UUID
 
 
 def ensure_connection_for_match(
@@ -48,7 +51,7 @@ def ensure_connection_for_match(
     match: CaseMatch,
     *,
     source: str,
-) -> list[MatchSmsAlert]:
+) -> list[MatchPushAlert]:
     if match.decision != "match":
         return []
     missing_owner = db.get(CaseAccount, match.missing_case_id)
@@ -105,13 +108,24 @@ def ensure_connection_for_match(
                 "source": source,
             },
         )
-        if get_settings().match_alert_sms_enabled:
-            for account_id in account_ids:
+        if get_settings().push_notifications_enabled:
+            installations = db.scalars(
+                select(AppInstallation).where(
+                    AppInstallation.account_id.in_(account_ids),
+                    AppInstallation.is_active.is_(True),
+                    AppInstallation.push_enabled.is_(True),
+                    AppInstallation.push_fid.is_not(None),
+                )
+            ).all()
+            for installation in installations:
                 record_event(
                     db,
-                    "match_sms_pending",
-                    account_id=account_id,
-                    data={"connection_id": str(connection_id)},
+                    "match_push_pending",
+                    account_id=installation.account_id,
+                    data={
+                        "connection_id": str(connection_id),
+                        "installation_id": str(installation.id),
+                    },
                 )
 
     for account_id in account_ids:
@@ -124,103 +138,134 @@ def ensure_connection_for_match(
             )
             .on_conflict_do_nothing(constraint="account_notification_event_key")
         )
-    if not get_settings().match_alert_sms_enabled:
+    if not get_settings().push_notifications_enabled:
         return []
     if connection_created:
         return [
-            MatchSmsAlert(connection_id=connection_id, account_id=account_id)
-            for account_id in account_ids
+            MatchPushAlert(
+                connection_id=connection_id,
+                account_id=installation.account_id,
+                installation_id=installation.id,
+            )
+            for installation in installations
+            if installation.account_id is not None
         ]
-    return _pending_match_sms_alerts(db, connection_id, account_ids)
+    return _pending_match_push_alerts(db, connection_id, account_ids)
 
 
-def _pending_match_sms_alerts(
+def _pending_match_push_alerts(
     db: Session,
     connection_id: uuid.UUID,
     account_ids: tuple[uuid.UUID, uuid.UUID],
-) -> list[MatchSmsAlert]:
+) -> list[MatchPushAlert]:
     events = db.scalars(
         select(AuditEvent).where(
             AuditEvent.account_id.in_(account_ids),
             AuditEvent.event_type.in_(
                 (
-                    "match_sms_pending",
-                    "match_sms_sent",
-                    "match_sms_delivery_skipped",
+                    "match_push_pending",
+                    "match_push_sent",
+                    "match_push_delivery_skipped",
                 )
             ),
         )
     ).all()
-    pending_accounts = {
-        event.account_id
+    pending_installations = {
+        (event.account_id, event.event_data.get("installation_id"))
         for event in events
-        if event.event_type == "match_sms_pending"
+        if event.event_type == "match_push_pending"
         and event.event_data.get("connection_id") == str(connection_id)
+        and event.event_data.get("installation_id")
     }
-    completed_accounts = {
-        event.account_id
+    completed_installations = {
+        (event.account_id, event.event_data.get("installation_id"))
         for event in events
-        if event.event_type in {"match_sms_sent", "match_sms_delivery_skipped"}
+        if event.event_type in {"match_push_sent", "match_push_delivery_skipped"}
         and event.event_data.get("connection_id") == str(connection_id)
+        and event.event_data.get("installation_id")
     }
     return [
-        MatchSmsAlert(connection_id=connection_id, account_id=account_id)
-        for account_id in account_ids
-        if account_id in pending_accounts and account_id not in completed_accounts
+        MatchPushAlert(
+            connection_id=connection_id,
+            account_id=account_id,
+            installation_id=uuid.UUID(installation_id),
+        )
+        for account_id, installation_id in pending_installations
+        if (account_id, installation_id) not in completed_installations
+        and account_id is not None
+        and isinstance(installation_id, str)
     ]
 
 
-def send_match_sms_alerts(
+def send_match_push_alerts(
     db: Session,
-    alerts: list[MatchSmsAlert],
+    alerts: list[MatchPushAlert],
 ) -> None:
     settings = get_settings()
-    if not settings.match_alert_sms_enabled or not alerts:
+    if not settings.push_notifications_enabled or not alerts:
         return
 
     for alert in alerts:
-        account = db.get(Account, alert.account_id)
-        if account is None or not account.is_active:
+        installation = db.get(AppInstallation, alert.installation_id)
+        if (
+            installation is None
+            or installation.account_id != alert.account_id
+            or not installation.is_active
+            or not installation.push_enabled
+            or not installation.push_fid
+        ):
             record_event(
                 db,
-                "match_sms_delivery_skipped",
+                "match_push_delivery_skipped",
                 account_id=alert.account_id,
                 data={
                     "connection_id": str(alert.connection_id),
-                    "reason": "inactive_or_missing_account",
+                    "installation_id": str(alert.installation_id),
+                    "reason": "inactive_or_missing_installation",
                 },
             )
             continue
         try:
-            idempotency_key = str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"reunitenow:match-alert:{alert.connection_id}:{alert.account_id}",
-                )
-            )
-            provider_message_id = send_telnyx_match_alert(
-                account.phone_number,
-                idempotency_key=idempotency_key,
+            provider_message_id = send_firebase_match_alert(
+                installation.push_fid,
+                connection_id=str(alert.connection_id),
                 settings=settings,
             )
-        except MatchAlertDeliveryError:
+        except InvalidPushFidError:
+            installation.push_fid = None
+            installation.push_enabled = False
+            installation.push_fid_updated_at = datetime.now(UTC)
             record_event(
                 db,
-                "match_sms_delivery_failed",
+                "match_push_delivery_skipped",
                 account_id=alert.account_id,
                 data={
                     "connection_id": str(alert.connection_id),
-                    "provider": "telnyx",
+                    "installation_id": str(alert.installation_id),
+                    "reason": "invalid_fid",
+                },
+            )
+            continue
+        except PushDeliveryError:
+            record_event(
+                db,
+                "match_push_delivery_failed",
+                account_id=alert.account_id,
+                data={
+                    "connection_id": str(alert.connection_id),
+                    "installation_id": str(alert.installation_id),
+                    "provider": "firebase",
                 },
             )
             continue
         record_event(
             db,
-            "match_sms_sent",
+            "match_push_sent",
             account_id=alert.account_id,
             data={
                 "connection_id": str(alert.connection_id),
-                "provider": "telnyx",
+                "installation_id": str(alert.installation_id),
+                "provider": "firebase",
                 "provider_message_id": provider_message_id,
             },
         )

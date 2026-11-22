@@ -170,6 +170,12 @@ class InstallationRequest(BaseModel):
     build_number: str = Field(min_length=1, max_length=32)
 
 
+class PushRegistrationRequest(BaseModel):
+    installation_id: uuid.UUID
+    fid: str | None = Field(default=None, min_length=20, max_length=255)
+    enabled: bool
+
+
 class InstallationOut(BaseModel):
     installation_id: uuid.UUID
     account_id: uuid.UUID | None
@@ -180,6 +186,7 @@ class InstallationOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     last_authenticated_at: datetime | None
+    push_enabled: bool
     is_active: bool
 
 

@@ -1,4 +1,4 @@
-# MatchSnap cloud deployment
+# ReuniteNow cloud deployment
 
 The cloud stack runs FastAPI, PostgreSQL/pgvector, MinIO, and Caddy on one
 Docker host. Only HTTP/HTTPS are published; PostgreSQL, MinIO, and FastAPI stay
@@ -17,12 +17,12 @@ registry.
 5. Leave `APP_REVIEW_PHONE_NUMBER` and `APP_REVIEW_OTP_CODE` empty unless Apple
    needs a temporary review login. When enabled, use one E.164 phone number and
    a six-digit code, then clear both values after review.
-6. Leave `MATCH_ALERT_SMS_ENABLED=false` until an SMS-capable Telnyx sender is
-   assigned to a messaging profile. Set
-   `TELNYX_MATCH_ALERT_MESSAGING_PROFILE_ID` and
-   `TELNYX_MATCH_ALERT_FROM` before enabling it. Match alerts contain only
-   `Potential match—open ReuniteNow.` and never include case data, scores,
-   photos, phone numbers, or meeting codes.
+6. Leave `PUSH_NOTIFICATIONS_ENABLED=false` until Firebase Cloud Messaging is
+   configured. Store the minified service-account JSON in
+   `FIREBASE_SERVICE_ACCOUNT_JSON`, then enable push delivery. Match alerts
+   contain only `Potential match—open ReuniteNow.` and a connection ID for
+   in-app navigation; they never include case data, scores, photos, phone
+   numbers, or meeting codes.
 
 ## Start
 

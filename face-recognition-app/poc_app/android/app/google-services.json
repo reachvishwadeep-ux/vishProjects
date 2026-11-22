@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "268234601841",
+    "project_id": "reunitenow-app-fcm",
+    "storage_bucket": "reunitenow-app-fcm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:268234601841:android:961cf80a3d094e57deb2d0",
+        "android_client_info": {
+          "package_name": "com.facerec.poc_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB36b3NvEBI38wpSTGzMuFCwetJ50YYgyY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

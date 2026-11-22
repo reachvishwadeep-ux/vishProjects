@@ -9,6 +9,7 @@ from app import connection_service
 from app.models import (
     Account,
     AccountNotification,
+    AppInstallation,
     AuditEvent,
     CaseAccount,
     CaseFace,
@@ -308,7 +309,7 @@ def test_new_match_audit_links_both_photos_and_matching_source(
     monkeypatch.setattr(
         connection_service,
         "get_settings",
-        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+        lambda: SimpleNamespace(push_notifications_enabled=False),
     )
 
     class MatchDb:
@@ -350,13 +351,10 @@ def test_new_match_audit_links_both_photos_and_matching_source(
     assert event.event_data["missing_face_id"] == str(match.missing_face_id)
     assert event.event_data["found_face_id"] == str(match.found_face_id)
     assert event.event_data["source"] == "reconciliation"
-    assert {(alert.connection_id, alert.account_id) for alert in alerts} == {
-        (connection_id, missing_account_id),
-        (connection_id, found_account_id),
-    }
+    assert alerts == []
 
 
-def test_existing_connection_does_not_send_duplicate_sms_alerts(
+def test_new_match_queues_push_for_active_installations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     missing_account_id = uuid.uuid4()
@@ -372,31 +370,129 @@ def test_existing_connection_does_not_send_duplicate_sms_alerts(
         model_tag="buffalo_l",
     )
     connection_id = uuid.uuid4()
-    sent_events = [
-        AuditEvent(
+    installations = [
+        AppInstallation(
+            id=uuid.uuid4(),
             account_id=account_id,
-            event_type="match_sms_pending",
-            event_data={"connection_id": str(connection_id)},
-        )
-        for account_id in (missing_account_id, found_account_id)
-    ] + [
-        AuditEvent(
-            account_id=account_id,
-            event_type="match_sms_sent",
-            event_data={"connection_id": str(connection_id)},
+            platform="ios",
+            app_version="1.0.0",
+            build_number="3",
+            push_fid=f"fid-{account_id}",
+            push_enabled=True,
+            is_active=True,
         )
         for account_id in (missing_account_id, found_account_id)
     ]
     monkeypatch.setattr(
         connection_service,
         "get_settings",
-        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+        lambda: SimpleNamespace(push_notifications_enabled=True),
+    )
+
+    class MatchDb:
+        def __init__(self) -> None:
+            self.events: list[AuditEvent] = []
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is CaseAccount and object_id == match.missing_case_id:
+                return CaseAccount(
+                    case_id=match.missing_case_id,
+                    account_id=missing_account_id,
+                )
+            if model is CaseAccount and object_id == match.found_case_id:
+                return CaseAccount(
+                    case_id=match.found_case_id,
+                    account_id=found_account_id,
+                )
+            return None
+
+        def scalar(self, statement: object) -> uuid.UUID:
+            return connection_id
+
+        def execute(self, statement: object) -> None:
+            return None
+
+        def scalars(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(all=lambda: installations)
+
+        def add(self, value: AuditEvent) -> None:
+            self.events.append(value)
+
+    db = MatchDb()
+
+    alerts = connection_service.ensure_connection_for_match(
+        db,
+        match,
+        source="reconciliation",
+    )
+
+    assert {alert.installation_id for alert in alerts} == {
+        installation.id for installation in installations
+    }
+    pending = [event for event in db.events if event.event_type == "match_push_pending"]
+    assert len(pending) == 2
+    assert all(
+        installation.push_fid not in str(event.event_data)
+        for event in pending
+        for installation in installations
+    )
+
+
+def test_existing_connection_does_not_duplicate_sent_push(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_account_id = uuid.uuid4()
+    found_account_id = uuid.uuid4()
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=uuid.uuid4(),
+        found_case_id=uuid.uuid4(),
+        missing_face_id=uuid.uuid4(),
+        found_face_id=uuid.uuid4(),
+        score=0.84,
+        decision="match",
+        model_tag="buffalo_l",
+    )
+    connection_id = uuid.uuid4()
+    installation_ids = (uuid.uuid4(), uuid.uuid4())
+    completed_events = [
+        AuditEvent(
+            account_id=account_id,
+            event_type="match_push_pending",
+            event_data={
+                "connection_id": str(connection_id),
+                "installation_id": str(installation_id),
+            },
+        )
+        for account_id, installation_id in zip(
+            (missing_account_id, found_account_id),
+            installation_ids,
+            strict=True,
+        )
+    ] + [
+        AuditEvent(
+            account_id=account_id,
+            event_type="match_push_sent",
+            event_data={
+                "connection_id": str(connection_id),
+                "installation_id": str(installation_id),
+            },
+        )
+        for account_id, installation_id in zip(
+            (missing_account_id, found_account_id),
+            installation_ids,
+            strict=True,
+        )
+    ]
+    monkeypatch.setattr(
+        connection_service,
+        "get_settings",
+        lambda: SimpleNamespace(push_notifications_enabled=True),
     )
 
     class ExistingConnectionDb:
         def __init__(self) -> None:
             self.scalar_calls = 0
-            self.events: list[AuditEvent] = []
 
         def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
             if model is CaseAccount and object_id == match.missing_case_id:
@@ -419,24 +515,21 @@ def test_existing_connection_does_not_send_duplicate_sms_alerts(
             return None
 
         def scalars(self, statement: object) -> SimpleNamespace:
-            return SimpleNamespace(all=lambda: sent_events)
+            return SimpleNamespace(all=lambda: completed_events)
 
         def add(self, value: AuditEvent) -> None:
-            self.events.append(value)
-
-    db = ExistingConnectionDb()
+            return None
 
     alerts = connection_service.ensure_connection_for_match(
-        db,
+        ExistingConnectionDb(),
         match,
         source="reconciliation",
     )
 
     assert alerts == []
-    assert db.events == []
 
 
-def test_failed_match_sms_is_retried_during_reconciliation(
+def test_failed_match_push_is_retried_during_reconciliation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     missing_account_id = uuid.uuid4()
@@ -452,25 +545,30 @@ def test_failed_match_sms_is_retried_during_reconciliation(
         model_tag="buffalo_l",
     )
     connection_id = uuid.uuid4()
+    installation_id = uuid.uuid4()
     pending_events = [
         AuditEvent(
-            account_id=account_id,
-            event_type="match_sms_pending",
-            event_data={"connection_id": str(connection_id)},
-        )
-        for account_id in (missing_account_id, found_account_id)
-    ]
-    pending_events.append(
+            account_id=missing_account_id,
+            event_type="match_push_pending",
+            event_data={
+                "connection_id": str(connection_id),
+                "installation_id": str(installation_id),
+            },
+        ),
         AuditEvent(
             account_id=missing_account_id,
-            event_type="match_sms_delivery_failed",
-            event_data={"connection_id": str(connection_id)},
-        )
-    )
+            event_type="match_push_delivery_failed",
+            event_data={
+                "connection_id": str(connection_id),
+                "installation_id": str(installation_id),
+            },
+        ),
+    ]
+
     monkeypatch.setattr(
         connection_service,
         "get_settings",
-        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+        lambda: SimpleNamespace(push_notifications_enabled=True),
     )
 
     class RetryDb:
@@ -509,18 +607,21 @@ def test_failed_match_sms_is_retried_during_reconciliation(
         source="reconciliation",
     )
 
-    assert {alert.account_id for alert in alerts} == {
-        missing_account_id,
-        found_account_id,
-    }
+    assert alerts == [
+        connection_service.MatchPushAlert(
+            connection_id=connection_id,
+            account_id=missing_account_id,
+            installation_id=installation_id,
+        )
+    ]
 
 
-def test_match_sms_alerts_remain_disabled_by_default(
+def test_match_push_alerts_remain_disabled_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class DisabledDb:
         def get(self, model: type[object], object_id: uuid.UUID) -> object:
-            raise AssertionError("disabled alerts must not load account data")
+            raise AssertionError("disabled alerts must not load installation data")
 
         def commit(self) -> None:
             raise AssertionError("disabled alerts must not create audit data")
@@ -528,33 +629,45 @@ def test_match_sms_alerts_remain_disabled_by_default(
     monkeypatch.setattr(
         connection_service,
         "get_settings",
-        lambda: SimpleNamespace(match_alert_sms_enabled=False),
+        lambda: SimpleNamespace(push_notifications_enabled=False),
     )
 
-    connection_service.send_match_sms_alerts(
+    connection_service.send_match_push_alerts(
         DisabledDb(),
         [
-            connection_service.MatchSmsAlert(
+            connection_service.MatchPushAlert(
                 connection_id=uuid.uuid4(),
                 account_id=uuid.uuid4(),
+                installation_id=uuid.uuid4(),
             )
         ],
     )
 
 
-def test_match_sms_alerts_are_idempotent_and_privacy_safe(
+def test_match_push_success_and_invalid_fid_are_audited_safely(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     connection_id = uuid.uuid4()
-    accounts = [
-        Account(
+    account_id = uuid.uuid4()
+    installations = [
+        AppInstallation(
             id=uuid.uuid4(),
-            phone_number="+919000000001",
+            account_id=account_id,
+            platform="ios",
+            app_version="1.0.0",
+            build_number="3",
+            push_fid="valid-fid",
+            push_enabled=True,
             is_active=True,
         ),
-        Account(
+        AppInstallation(
             id=uuid.uuid4(),
-            phone_number="+919000000002",
+            account_id=account_id,
+            platform="android",
+            app_version="1.0.0",
+            build_number="3",
+            push_fid="invalid-fid",
+            push_enabled=True,
             is_active=True,
         ),
     ]
@@ -566,9 +679,13 @@ def test_match_sms_alerts_are_idempotent_and_privacy_safe(
             self.commits = 0
 
         def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
-            if model is Account:
+            if model is AppInstallation:
                 return next(
-                    (account for account in accounts if account.id == object_id),
+                    (
+                        installation
+                        for installation in installations
+                        if installation.id == object_id
+                    ),
                     None,
                 )
             return None
@@ -582,66 +699,73 @@ def test_match_sms_alerts_are_idempotent_and_privacy_safe(
     monkeypatch.setattr(
         connection_service,
         "get_settings",
-        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+        lambda: SimpleNamespace(push_notifications_enabled=True),
     )
 
-    def send(phone_number: str, *, idempotency_key: str, settings: object) -> str:
-        sent.append((phone_number, idempotency_key))
-        return f"provider-{len(sent)}"
+    def send(fid: str, *, connection_id: str, settings: object) -> str:
+        sent.append((fid, connection_id))
+        if fid == "invalid-fid":
+            raise connection_service.InvalidPushFidError("invalid")
+        return "provider-success"
 
-    monkeypatch.setattr(connection_service, "send_telnyx_match_alert", send)
+    monkeypatch.setattr(connection_service, "send_firebase_match_alert", send)
     db = AlertDb()
-    alerts = [
-        connection_service.MatchSmsAlert(
-            connection_id=connection_id,
-            account_id=account.id,
-        )
-        for account in accounts
-    ]
 
-    connection_service.send_match_sms_alerts(db, alerts)
+    connection_service.send_match_push_alerts(
+        db,
+        [
+            connection_service.MatchPushAlert(
+                connection_id=connection_id,
+                account_id=account_id,
+                installation_id=installation.id,
+            )
+            for installation in installations
+        ],
+    )
 
     assert sent == [
-        (
-            accounts[0].phone_number,
-            str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"reunitenow:match-alert:{connection_id}:{accounts[0].id}",
-                )
-            ),
-        ),
-        (
-            accounts[1].phone_number,
-            str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"reunitenow:match-alert:{connection_id}:{accounts[1].id}",
-                )
-            ),
-        ),
+        ("valid-fid", str(connection_id)),
+        ("invalid-fid", str(connection_id)),
     ]
     assert [event.event_type for event in db.events] == [
-        "match_sms_sent",
-        "match_sms_sent",
+        "match_push_sent",
+        "match_push_delivery_skipped",
     ]
-    assert all("phone" not in str(event.event_data).lower() for event in db.events)
+    assert all(
+        installation.push_fid not in str(event.event_data)
+        for event in db.events
+        for installation in installations
+        if installation.push_fid
+    )
+    assert installations[1].push_fid is None
+    assert installations[1].push_enabled is False
     assert db.commits == 1
 
 
-def test_match_sms_failure_does_not_block_other_alerts(
+def test_match_push_failure_does_not_block_other_installations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     connection_id = uuid.uuid4()
-    accounts = [
-        Account(
+    account_id = uuid.uuid4()
+    installations = [
+        AppInstallation(
             id=uuid.uuid4(),
-            phone_number="+919000000001",
+            account_id=account_id,
+            platform="ios",
+            app_version="1.0.0",
+            build_number="3",
+            push_fid="temporary-failure",
+            push_enabled=True,
             is_active=True,
         ),
-        Account(
+        AppInstallation(
             id=uuid.uuid4(),
-            phone_number="+919000000002",
+            account_id=account_id,
+            platform="android",
+            app_version="1.0.0",
+            build_number="3",
+            push_fid="success",
+            push_enabled=True,
             is_active=True,
         ),
     ]
@@ -651,9 +775,13 @@ def test_match_sms_failure_does_not_block_other_alerts(
             self.events: list[AuditEvent] = []
 
         def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
-            if model is Account:
+            if model is AppInstallation:
                 return next(
-                    (account for account in accounts if account.id == object_id),
+                    (
+                        installation
+                        for installation in installations
+                        if installation.id == object_id
+                    ),
                     None,
                 )
             return None
@@ -667,36 +795,34 @@ def test_match_sms_failure_does_not_block_other_alerts(
     monkeypatch.setattr(
         connection_service,
         "get_settings",
-        lambda: SimpleNamespace(match_alert_sms_enabled=True),
+        lambda: SimpleNamespace(push_notifications_enabled=True),
     )
-    calls = 0
 
-    def send(phone_number: str, *, idempotency_key: str, settings: object) -> str:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            raise connection_service.MatchAlertDeliveryError("provider failure")
+    def send(fid: str, *, connection_id: str, settings: object) -> str:
+        if fid == "temporary-failure":
+            raise connection_service.PushDeliveryError("provider failure")
         return "provider-success"
 
-    monkeypatch.setattr(connection_service, "send_telnyx_match_alert", send)
+    monkeypatch.setattr(connection_service, "send_firebase_match_alert", send)
     db = AlertDb()
 
-    connection_service.send_match_sms_alerts(
+    connection_service.send_match_push_alerts(
         db,
         [
-            connection_service.MatchSmsAlert(
+            connection_service.MatchPushAlert(
                 connection_id=connection_id,
-                account_id=account.id,
+                account_id=account_id,
+                installation_id=installation.id,
             )
-            for account in accounts
+            for installation in installations
         ],
     )
 
-    assert calls == 2
     assert [event.event_type for event in db.events] == [
-        "match_sms_delivery_failed",
-        "match_sms_sent",
+        "match_push_delivery_failed",
+        "match_push_sent",
     ]
+    assert installations[0].push_enabled is True
 
 
 def test_withdrawing_consent_revokes_meeting_codes(

@@ -13,7 +13,7 @@ from app.auth import AuthPrincipal, require_principal
 from app.db import get_db
 from app.models import Account, AppInstallation, AuditEvent, CaseAccount, CaseRecord
 from app.routers import audit
-from app.schemas import InstallationRequest
+from app.schemas import InstallationRequest, PushRegistrationRequest
 
 
 def _settings() -> SimpleNamespace:
@@ -73,6 +73,81 @@ def test_installation_registration_is_idempotent_and_can_bind_to_account(
     assert len(registrations) == 1
     assert installation.account_id == account.id
     assert installation.last_authenticated_at is not None
+    session.close()
+
+
+def test_push_registration_rotates_without_auditing_fid(
+    monkeypatch,
+) -> None:
+    session = _session()
+    account = Account(phone_number="+919876543210")
+    session.add(account)
+    session.commit()
+    monkeypatch.setattr(audit_service, "get_settings", _settings)
+    first_request = InstallationRequest(
+        installation_id=uuid.uuid4(),
+        platform="android",
+        app_version="1.0.0",
+        build_number="1",
+    )
+    second_request = InstallationRequest(
+        installation_id=uuid.uuid4(),
+        platform="ios",
+        app_version="1.0.0",
+        build_number="2",
+    )
+    first = audit_service.register_installation(
+        session,
+        first_request,
+        account=account,
+    )
+    second = audit_service.register_installation(
+        session,
+        second_request,
+        account=account,
+    )
+    fid = "firebase-installation-id-long-enough"
+
+    audit_service.register_push_installation(
+        session,
+        PushRegistrationRequest(
+            installation_id=first.id,
+            fid=fid,
+            enabled=True,
+        ),
+        account=account,
+    )
+    updated = audit_service.register_push_installation(
+        session,
+        PushRegistrationRequest(
+            installation_id=second.id,
+            fid=fid,
+            enabled=True,
+        ),
+        account=account,
+    )
+    session.refresh(first)
+
+    assert first.push_fid is None
+    assert first.push_enabled is False
+    assert updated.push_fid == fid
+    assert updated.push_enabled is True
+    events = session.scalars(
+        select(AuditEvent).where(AuditEvent.event_type == "push_registration_updated")
+    ).all()
+    assert len(events) == 2
+    assert all(fid not in str(event.event_data) for event in events)
+
+    disabled = audit_service.register_push_installation(
+        session,
+        PushRegistrationRequest(
+            installation_id=second.id,
+            enabled=False,
+        ),
+        account=account,
+    )
+    assert disabled.push_fid is None
+    assert disabled.push_enabled is False
     session.close()
 
 

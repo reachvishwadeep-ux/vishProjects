@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
@@ -9,12 +11,13 @@ import 'auth/auth_repository.dart';
 import 'config.dart';
 import 'connections/connection_repository.dart';
 import 'matching/remote_matcher.dart';
+import 'notifications/push_notification_controller.dart';
 import 'repository/gallery_repository.dart';
 import 'screens/phone_auth_screen.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final authRepository = AuthRepository(baseUrl: Config.apiBaseUrl);
   final auth = AuthController(repository: authRepository);
@@ -29,11 +32,24 @@ void main() {
     tokenProvider: authRepository.validAccessToken,
     onAuthenticationFailure: auth.logout,
   );
+  PushNotificationController? pushNotifications;
+  if (Platform.isIOS || Platform.isAndroid) {
+    try {
+      await Firebase.initializeApp();
+      pushNotifications = PushNotificationController(
+        installations: installations,
+      );
+      await pushNotifications.start();
+    } on Object {
+      // Missing or unavailable Firebase configuration must not block the app.
+    }
+  }
   runApp(
     PocApp(
       auth: auth,
       connections: connections,
       installations: installations,
+      pushNotifications: pushNotifications,
       state: AppState(
         repository: GalleryRepository(),
         connections: connections,
@@ -55,12 +71,14 @@ class PocApp extends StatefulWidget {
     this.auth,
     this.connections,
     this.installations,
+    this.pushNotifications,
   });
 
   final AppState state;
   final AuthController? auth;
   final ConnectionRepository? connections;
   final InstallationRepository? installations;
+  final PushNotificationController? pushNotifications;
 
   @override
   State<PocApp> createState() => _PocAppState();
@@ -75,12 +93,14 @@ class _PocAppState extends State<PocApp> {
     widget.state.initialize();
     widget.auth?.initialize();
     widget.auth?.addListener(_handleAuthenticationChange);
+    widget.pushNotifications?.addListener(_handlePushNotification);
     unawaited(_registerInstallation());
   }
 
   @override
   void dispose() {
     widget.auth?.removeListener(_handleAuthenticationChange);
+    widget.pushNotifications?.removeListener(_handlePushNotification);
     super.dispose();
   }
 
@@ -109,9 +129,14 @@ class _PocAppState extends State<PocApp> {
   Future<void> _bindInstallation() async {
     try {
       await widget.installations?.bind();
+      await widget.pushNotifications?.registerForAuthenticatedAccount();
     } on Object {
       // The next authenticated app launch retries this association.
     }
+  }
+
+  void _handlePushNotification() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -138,6 +163,7 @@ class _PocAppState extends State<PocApp> {
                   state: widget.state,
                   auth: widget.auth,
                   connections: widget.connections,
+                  pushNotifications: widget.pushNotifications,
                 );
               },
             ),

@@ -43,9 +43,8 @@ class Settings(BaseSettings):
     app_review_otp_code: str | None = None
     telnyx_api_key: str | None = None
     telnyx_verify_profile_id: str | None = None
-    match_alert_sms_enabled: bool = False
-    telnyx_match_alert_messaging_profile_id: str | None = None
-    telnyx_match_alert_from: str | None = None
+    push_notifications_enabled: bool = False
+    firebase_service_account_json: str | None = None
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_verify_service_sid: str | None = None
