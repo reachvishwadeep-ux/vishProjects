@@ -11,7 +11,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.audit_service import record_event, record_repeated_failure_risk, record_risk_alert
+from app.audit_service import (
+    record_event,
+    record_repeated_failure_risk,
+    record_risk_alert,
+)
 from app.config import get_settings
 from app.models import (
     Account,
@@ -285,7 +289,9 @@ def connection_ids_for_case(
         select(CaseMatch.missing_case_id, CaseMatch.found_case_id, MatchConnection.id)
         .join(MatchConnection, MatchConnection.case_match_id == CaseMatch.id)
         .where(
-            or_(CaseMatch.missing_case_id == case_id, CaseMatch.found_case_id == case_id),
+            or_(
+                CaseMatch.missing_case_id == case_id, CaseMatch.found_case_id == case_id
+            ),
             or_(
                 MatchConnection.missing_account_id == account_id,
                 MatchConnection.found_account_id == account_id,
@@ -293,7 +299,9 @@ def connection_ids_for_case(
         )
     ).all()
     return {
-        (found_case_id if missing_case_id == case_id else missing_case_id): connection_id
+        (
+            found_case_id if missing_case_id == case_id else missing_case_id
+        ): connection_id
         for missing_case_id, found_case_id, connection_id in rows
     }
 
@@ -313,7 +321,9 @@ def list_connections(
         .order_by(MatchConnection.created_at.desc())
     ).all()
     return ConnectionListResponse(
-        results=[_connection_out(db, connection, account.id) for connection in connections]
+        results=[
+            _connection_out(db, connection, account.id) for connection in connections
+        ]
     )
 
 
