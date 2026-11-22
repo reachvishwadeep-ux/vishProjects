@@ -1,4 +1,5 @@
 import json
+from threading import Lock
 from typing import Protocol
 
 import firebase_admin
@@ -8,6 +9,7 @@ from firebase_admin.exceptions import FirebaseError
 PUSH_TITLE = "ReuniteNow"
 PUSH_BODY = "Potential match—open ReuniteNow."
 FIREBASE_APP_NAME = "reunitenow"
+_FIREBASE_APP_LOCK = Lock()
 
 
 class PushProviderSettings(Protocol):
@@ -64,12 +66,17 @@ def _firebase_app(settings: PushProviderSettings) -> firebase_admin.App:
         return firebase_admin.get_app(FIREBASE_APP_NAME)
     except ValueError:
         pass
-    try:
-        service_account = json.loads(settings.firebase_service_account_json)
-        credential = credentials.Certificate(service_account)
-    except (json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise PushDeliveryError("Firebase credentials are invalid") from exc
-    return firebase_admin.initialize_app(
-        credential,
-        name=FIREBASE_APP_NAME,
-    )
+    with _FIREBASE_APP_LOCK:
+        try:
+            return firebase_admin.get_app(FIREBASE_APP_NAME)
+        except ValueError:
+            pass
+        try:
+            service_account = json.loads(settings.firebase_service_account_json)
+            credential = credentials.Certificate(service_account)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise PushDeliveryError("Firebase credentials are invalid") from exc
+        return firebase_admin.initialize_app(
+            credential,
+            name=FIREBASE_APP_NAME,
+        )
