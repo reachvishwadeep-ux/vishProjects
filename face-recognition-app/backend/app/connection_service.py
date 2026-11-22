@@ -33,6 +33,9 @@ from app.schemas import (
     ConnectionListResponse,
     ConnectionOut,
     ConnectionRole,
+    MatchHistoryListResponse,
+    MatchHistoryOut,
+    MatchHistoryRole,
 )
 from app.storage import get_store
 
@@ -314,6 +317,33 @@ def list_connections(
     )
 
 
+def list_match_history(
+    db: Session,
+    account: Account,
+) -> MatchHistoryListResponse:
+    owned_case_ids = (
+        select(CaseAccount.case_id)
+        .where(CaseAccount.account_id == account.id)
+        .scalar_subquery()
+    )
+    matches = db.scalars(
+        select(CaseMatch)
+        .where(
+            or_(
+                CaseMatch.missing_case_id.in_(owned_case_ids),
+                CaseMatch.found_case_id.in_(owned_case_ids),
+            )
+        )
+        .order_by(CaseMatch.updated_at.desc(), CaseMatch.created_at.desc())
+    ).all()
+    results = [
+        result
+        for match in matches
+        if (result := _match_history_out(db, match, account.id)) is not None
+    ]
+    return MatchHistoryListResponse(results=results)
+
+
 def consent_to_connection(
     db: Session,
     *,
@@ -569,6 +599,62 @@ def _connection_out(
         meeting_code=meeting_code,
         meeting_code_expires_at=connection.meeting_code_expires_at,
         created_at=connection.created_at,
+    )
+
+
+def _match_history_out(
+    db: Session,
+    match: CaseMatch,
+    account_id: uuid.UUID,
+) -> MatchHistoryOut | None:
+    missing_owner = db.get(CaseAccount, match.missing_case_id)
+    found_owner = db.get(CaseAccount, match.found_case_id)
+    missing_case = db.get(CaseRecord, match.missing_case_id)
+    found_case = db.get(CaseRecord, match.found_case_id)
+    if (
+        missing_owner is None
+        or found_owner is None
+        or missing_case is None
+        or found_case is None
+    ):
+        return None
+
+    owns_missing = missing_owner.account_id == account_id
+    owns_found = found_owner.account_id == account_id
+    if not owns_missing and not owns_found:
+        return None
+    if owns_missing and owns_found:
+        role = MatchHistoryRole.both
+        image_face_id = match.found_face_id
+    elif owns_missing:
+        role = MatchHistoryRole.missing
+        image_face_id = match.found_face_id
+    else:
+        role = MatchHistoryRole.found
+        image_face_id = match.missing_face_id
+
+    image_face = db.get(CaseFace, image_face_id)
+    connection = db.scalar(
+        select(MatchConnection).where(MatchConnection.case_match_id == match.id)
+    )
+    return MatchHistoryOut(
+        id=match.id,
+        role=role,
+        missing_case_id=match.missing_case_id,
+        found_case_id=match.found_case_id,
+        missing_subject_label=missing_case.subject_label,
+        found_subject_label=found_case.subject_label,
+        score=match.score,
+        decision=match.decision,
+        image_url=(
+            get_store().presigned_url(image_face.image_key)
+            if image_face is not None
+            else None
+        ),
+        same_account=missing_owner.account_id == found_owner.account_id,
+        connection_id=connection.id if connection is not None else None,
+        connection_status=connection.status if connection is not None else None,
+        created_at=match.updated_at or match.created_at,
     )
 
 

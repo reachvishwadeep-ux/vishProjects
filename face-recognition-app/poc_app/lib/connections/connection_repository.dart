@@ -60,6 +60,56 @@ class MatchConnection {
   final DateTime createdAt;
 }
 
+class MatchHistoryEntry {
+  const MatchHistoryEntry({
+    required this.id,
+    required this.role,
+    required this.missingCaseId,
+    required this.foundCaseId,
+    required this.missingSubjectLabel,
+    required this.foundSubjectLabel,
+    required this.score,
+    required this.decision,
+    required this.sameAccount,
+    required this.createdAt,
+    this.imageUrl,
+    this.connectionId,
+    this.connectionStatus,
+  });
+
+  factory MatchHistoryEntry.fromJson(Map<String, Object?> json) {
+    return MatchHistoryEntry(
+      id: json['id']! as String,
+      role: json['role']! as String,
+      missingCaseId: json['missing_case_id']! as String,
+      foundCaseId: json['found_case_id']! as String,
+      missingSubjectLabel: json['missing_subject_label']! as String,
+      foundSubjectLabel: json['found_subject_label']! as String,
+      score: (json['score']! as num).toDouble(),
+      decision: json['decision']! as String,
+      imageUrl: json['image_url'] as String?,
+      sameAccount: json['same_account']! as bool,
+      connectionId: json['connection_id'] as String?,
+      connectionStatus: json['connection_status'] as String?,
+      createdAt: DateTime.parse(json['created_at']! as String).toLocal(),
+    );
+  }
+
+  final String id;
+  final String role;
+  final String missingCaseId;
+  final String foundCaseId;
+  final String missingSubjectLabel;
+  final String foundSubjectLabel;
+  final double score;
+  final String decision;
+  final String? imageUrl;
+  final bool sameAccount;
+  final String? connectionId;
+  final String? connectionStatus;
+  final DateTime createdAt;
+}
+
 class ConnectionRepository {
   ConnectionRepository({
     required this.baseUrl,
@@ -79,6 +129,18 @@ class ConnectionRepository {
     return results
         .map(
           (value) => MatchConnection.fromJson(
+            value! as Map<String, Object?>,
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<MatchHistoryEntry>> listMatches() async {
+    final payload = await _request('GET', '/v1/connections/matches');
+    final results = payload['results']! as List<Object?>;
+    return results
+        .map(
+          (value) => MatchHistoryEntry.fromJson(
             value! as Map<String, Object?>,
           ),
         )

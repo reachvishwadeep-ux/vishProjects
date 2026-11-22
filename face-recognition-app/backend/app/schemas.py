@@ -121,6 +121,32 @@ class ConnectionListResponse(BaseModel):
     results: list[ConnectionOut]
 
 
+class MatchHistoryRole(StrEnum):
+    missing = "missing"
+    found = "found"
+    both = "both"
+
+
+class MatchHistoryOut(BaseModel):
+    id: uuid.UUID
+    role: MatchHistoryRole
+    missing_case_id: uuid.UUID
+    found_case_id: uuid.UUID
+    missing_subject_label: str
+    found_subject_label: str
+    score: float
+    decision: str
+    image_url: str | None = None
+    same_account: bool
+    connection_id: uuid.UUID | None = None
+    connection_status: str | None = None
+    created_at: datetime
+
+
+class MatchHistoryListResponse(BaseModel):
+    results: list[MatchHistoryOut]
+
+
 class MeetingCodeVerifyRequest(BaseModel):
     code: str
 

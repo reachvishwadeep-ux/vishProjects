@@ -14,6 +14,7 @@ class MyMatchesScreen extends StatefulWidget {
 
 class _MyMatchesScreenState extends State<MyMatchesScreen> {
   List<MatchConnection> _connections = const [];
+  List<MatchHistoryEntry> _matches = const [];
   String? _error;
   var _loading = true;
 
@@ -29,6 +30,7 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
       setState(() {
         _loading = false;
         _connections = const [];
+        _matches = const [];
       });
       return;
     }
@@ -38,8 +40,12 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
     });
     try {
       final connections = await repository.list();
+      final matches = await repository.listMatches();
       if (!mounted) return;
-      setState(() => _connections = connections);
+      setState(() {
+        _connections = connections;
+        _matches = matches;
+      });
     } on ConnectionException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -63,6 +69,9 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
   Widget build(BuildContext context) {
     final unreadCount =
         _connections.where((connection) => connection.unread).length;
+    final historyOnly = _matches
+        .where((match) => match.connectionId == null)
+        .toList(growable: false);
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _load,
@@ -89,7 +98,7 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                       const SizedBox(height: 4),
                       Text(
                         unreadCount == 0
-                            ? 'Private match and consent updates'
+                            ? 'Potential matches and private connections'
                             : '$unreadCount new connection update'
                                 '${unreadCount == 1 ? '' : 's'}',
                         style: const TextStyle(color: brandMuted),
@@ -124,26 +133,50 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                 actionLabel: 'Try again',
                 onAction: _load,
               )
-            else if (_connections.isEmpty)
+            else if (_connections.isEmpty && historyOnly.isEmpty)
               const _StateCard(
                 icon: Icons.manage_search_rounded,
-                title: 'No connections yet',
+                title: 'No matches yet',
                 message:
                     'ReuniteNow will keep comparing missing and found cases. '
-                    'A private update will appear here when a candidate match '
-                    'is found.',
+                    'Potential match results and secure cross-account '
+                    'connections will appear here.',
               )
-            else
-              ..._connections.map(
-                (connection) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _ConnectionCard(
-                    connection: connection,
-                    repository: widget.repository!,
-                    onChanged: _replace,
+            else ...[
+              if (_connections.isNotEmpty) ...[
+                const _SectionHeading(
+                  title: 'Secure connections',
+                  message:
+                      'Cross-account matches with consent and meeting-code '
+                      'safeguards.',
+                ),
+                const SizedBox(height: 12),
+                ..._connections.map(
+                  (connection) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _ConnectionCard(
+                      connection: connection,
+                      repository: widget.repository!,
+                      onChanged: _replace,
+                    ),
                   ),
                 ),
-              ),
+              ],
+              if (historyOnly.isNotEmpty) ...[
+                const _SectionHeading(
+                  title: 'Potential match history',
+                  message: 'Current and previous visual comparisons, including '
+                      'matches between your own cases.',
+                ),
+                const SizedBox(height: 12),
+                ...historyOnly.map(
+                  (match) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _MatchHistoryCard(match: match),
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),
@@ -294,6 +327,142 @@ class _PrivacyBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: brandInk,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          message,
+          style: const TextStyle(
+            color: brandMuted,
+            fontSize: 11,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MatchHistoryCard extends StatelessWidget {
+  const _MatchHistoryCard({required this.match});
+
+  final MatchHistoryEntry match;
+
+  String get _ownershipLabel {
+    if (match.sameAccount) {
+      return 'Both cases are yours · no private connection is created';
+    }
+    if (match.role == 'missing') {
+      return 'Your missing-person case';
+    }
+    if (match.role == 'found') {
+      return 'Your found-person case';
+    }
+    return 'Your cases';
+  }
+
+  String get _dateLabel {
+    final value = match.createdAt;
+    return '${value.month}/${value.day}/${value.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final percentage = (match.score * 100).round();
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 25,
+                  backgroundColor: brandLavender,
+                  backgroundImage: match.imageUrl == null
+                      ? null
+                      : NetworkImage(match.imageUrl!),
+                  child: match.imageUrl == null
+                      ? const Icon(Icons.person_search_rounded)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${match.missingSubjectLabel} ↔ '
+                        '${match.foundSubjectLabel}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$percentage% visual similarity · matched $_dateLabel',
+                        style: const TextStyle(
+                          color: brandMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const _StatusPill(
+                  label: 'HISTORY',
+                  color: brandPurple,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _InlineNotice(
+              icon: match.sameAccount
+                  ? Icons.inventory_2_outlined
+                  : Icons.manage_search_rounded,
+              text: _ownershipLabel,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Similarity is review evidence only—not proof of identity, '
+              'guardianship, custody, or a safe handoff.',
+              style: TextStyle(
+                color: brandMuted,
+                fontSize: 10.5,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

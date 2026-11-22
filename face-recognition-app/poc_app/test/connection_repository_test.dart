@@ -39,6 +39,27 @@ Map<String, Object?> _connection({
   };
 }
 
+Map<String, Object?> _matchHistory({
+  bool sameAccount = true,
+  String? connectionId,
+}) {
+  return {
+    'id': 'b975ec71-ad73-4c50-a449-8fb40406b150',
+    'role': sameAccount ? 'both' : 'missing',
+    'missing_case_id': '7c40725a-3000-43f7-b24d-12d6daea4b5d',
+    'found_case_id': '1bf35de6-3945-450c-b05c-322bb76bfaca',
+    'missing_subject_label': 'Previous missing report',
+    'found_subject_label': 'Latest found report',
+    'score': 0.78,
+    'decision': 'match',
+    'image_url': null,
+    'same_account': sameAccount,
+    'connection_id': connectionId,
+    'connection_status': connectionId == null ? null : 'pending_consent',
+    'created_at': '2026-10-02T12:00:00Z',
+  };
+}
+
 ConnectionRepository _repository(MockClient client) {
   return ConnectionRepository(
     baseUrl: 'https://api.example.com',
@@ -70,6 +91,29 @@ void main() {
     expect(connections.single.otherSubjectLabel, 'Possible found-person case');
     expect(connections.single.score, 0.81);
     expect(connections.single.unread, isTrue);
+  });
+
+  test('lists authenticated current and previous match history', () async {
+    final repository = _repository(
+      MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/connections/matches');
+        expect(request.headers['authorization'], 'Bearer access-token');
+        return http.Response(
+          jsonEncode({
+            'results': [_matchHistory()],
+          }),
+          200,
+        );
+      }),
+    );
+
+    final matches = await repository.listMatches();
+
+    expect(matches, hasLength(1));
+    expect(matches.single.role, 'both');
+    expect(matches.single.sameAccount, isTrue);
+    expect(matches.single.connectionId, isNull);
   });
 
   test('submits consent and a peer meeting code', () async {
@@ -116,6 +160,9 @@ void main() {
       (tester) async {
     final repository = _repository(
       MockClient((request) async {
+        if (request.url.path == '/v1/connections/matches') {
+          return http.Response(jsonEncode({'results': []}), 200);
+        }
         return http.Response(
           jsonEncode({
             'results': [_connection()],
@@ -141,10 +188,50 @@ void main() {
     );
   });
 
+  testWidgets('match screen shows same-account current and previous matches',
+      (tester) async {
+    final repository = _repository(
+      MockClient((request) async {
+        if (request.url.path == '/v1/connections/matches') {
+          return http.Response(
+            jsonEncode({
+              'results': [_matchHistory()],
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'results': []}), 200);
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: MyMatchesScreen(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Potential match history'), findsOneWidget);
+    expect(
+      find.text('Previous missing report ↔ Latest found report'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Both cases are yours'),
+      findsOneWidget,
+    );
+    expect(find.text('No connections yet'), findsNothing);
+    expect(
+        find.textContaining('Similarity is review evidence'), findsOneWidget);
+  });
+
   testWidgets('peer code remains verifiable after own code is consumed',
       (tester) async {
     final repository = _repository(
       MockClient((request) async {
+        if (request.url.path == '/v1/connections/matches') {
+          return http.Response(jsonEncode({'results': []}), 200);
+        }
         return http.Response(
           jsonEncode({
             'results': [

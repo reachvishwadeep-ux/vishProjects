@@ -50,6 +50,30 @@ class FakeDb:
         return None
 
 
+class MatchHistoryDb:
+    def __init__(
+        self,
+        objects: list[object],
+        matches: list[CaseMatch],
+        connection: MatchConnection | None = None,
+    ) -> None:
+        self.objects = {
+            (type(value), getattr(value, "id", getattr(value, "case_id", None))): value
+            for value in objects
+        }
+        self.matches = matches
+        self.connection = connection
+
+    def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+        return self.objects.get((model, object_id))
+
+    def scalars(self, statement: object) -> SimpleNamespace:
+        return SimpleNamespace(all=lambda: self.matches)
+
+    def scalar(self, statement: object) -> MatchConnection | None:
+        return self.connection
+
+
 @pytest.fixture
 def connection_fixture(
     monkeypatch: pytest.MonkeyPatch,
@@ -152,6 +176,155 @@ def connection_fixture(
         notification,
     )
     return db, missing_account, found_account, connection
+
+
+def test_match_history_includes_same_account_matches_without_connections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    account_id = uuid.uuid4()
+    missing_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="missing",
+        subject_label="Earlier missing report",
+        status="active",
+    )
+    found_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="found",
+        subject_label="Recent found report",
+        status="active",
+    )
+    found_face = CaseFace(
+        id=uuid.uuid4(),
+        case_id=found_case.id,
+        case_type="found",
+        image_key="found-history.jpg",
+        bbox=[0, 0, 10, 10],
+        det_score=0.9,
+        model_tag="test",
+        embedding=[0.0] * 512,
+    )
+    created_at = datetime.now(UTC)
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=missing_case.id,
+        found_case_id=found_case.id,
+        missing_face_id=uuid.uuid4(),
+        found_face_id=found_face.id,
+        score=0.78,
+        decision="match",
+        model_tag="test",
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    db = MatchHistoryDb(
+        [
+            CaseAccount(case_id=missing_case.id, account_id=account_id),
+            CaseAccount(case_id=found_case.id, account_id=account_id),
+            missing_case,
+            found_case,
+            found_face,
+        ],
+        [match],
+    )
+    monkeypatch.setattr(connection_service, "get_store", lambda: FakeStore())
+
+    response = connection_service.list_match_history(
+        db,
+        Account(id=account_id, phone_number="+919000000001", is_active=True),
+    )
+
+    assert len(response.results) == 1
+    result = response.results[0]
+    assert result.role.value == "both"
+    assert result.same_account is True
+    assert result.connection_id is None
+    assert result.missing_subject_label == "Earlier missing report"
+    assert result.found_subject_label == "Recent found report"
+    assert result.image_url == "https://images.example.com/found-history.jpg"
+
+
+def test_match_history_links_cross_account_secure_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_account_id = uuid.uuid4()
+    found_account_id = uuid.uuid4()
+    missing_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="missing",
+        subject_label="Missing report",
+        status="active",
+    )
+    found_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="found",
+        subject_label="Found report",
+        status="active",
+    )
+    found_face = CaseFace(
+        id=uuid.uuid4(),
+        case_id=found_case.id,
+        case_type="found",
+        image_key="found-peer.jpg",
+        bbox=[0, 0, 10, 10],
+        det_score=0.9,
+        model_tag="test",
+        embedding=[0.0] * 512,
+    )
+    created_at = datetime.now(UTC)
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=missing_case.id,
+        found_case_id=found_case.id,
+        missing_face_id=uuid.uuid4(),
+        found_face_id=found_face.id,
+        score=0.82,
+        decision="match",
+        model_tag="test",
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    connection = MatchConnection(
+        id=uuid.uuid4(),
+        case_match_id=match.id,
+        missing_account_id=missing_account_id,
+        found_account_id=found_account_id,
+        status="pending_consent",
+        created_at=created_at,
+    )
+    db = MatchHistoryDb(
+        [
+            CaseAccount(
+                case_id=missing_case.id,
+                account_id=missing_account_id,
+            ),
+            CaseAccount(
+                case_id=found_case.id,
+                account_id=found_account_id,
+            ),
+            missing_case,
+            found_case,
+            found_face,
+        ],
+        [match],
+        connection,
+    )
+    monkeypatch.setattr(connection_service, "get_store", lambda: FakeStore())
+
+    response = connection_service.list_match_history(
+        db,
+        Account(
+            id=missing_account_id,
+            phone_number="+919000000001",
+            is_active=True,
+        ),
+    )
+
+    result = response.results[0]
+    assert result.role.value == "missing"
+    assert result.same_account is False
+    assert result.connection_id == connection.id
+    assert result.connection_status == "pending_consent"
 
 
 def test_mutual_consent_issues_distinct_short_lived_codes(
