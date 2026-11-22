@@ -289,9 +289,7 @@ def connection_ids_for_case(
         select(CaseMatch.missing_case_id, CaseMatch.found_case_id, MatchConnection.id)
         .join(MatchConnection, MatchConnection.case_match_id == CaseMatch.id)
         .where(
-            or_(
-                CaseMatch.missing_case_id == case_id, CaseMatch.found_case_id == case_id
-            ),
+            or_(CaseMatch.missing_case_id == case_id, CaseMatch.found_case_id == case_id),
             or_(
                 MatchConnection.missing_account_id == account_id,
                 MatchConnection.found_account_id == account_id,
@@ -299,9 +297,7 @@ def connection_ids_for_case(
         )
     ).all()
     return {
-        (
-            found_case_id if missing_case_id == case_id else missing_case_id
-        ): connection_id
+        (found_case_id if missing_case_id == case_id else missing_case_id): connection_id
         for missing_case_id, found_case_id, connection_id in rows
     }
 
@@ -321,9 +317,7 @@ def list_connections(
         .order_by(MatchConnection.created_at.desc())
     ).all()
     return ConnectionListResponse(
-        results=[
-            _connection_out(db, connection, account.id) for connection in connections
-        ]
+        results=[_connection_out(db, connection, account.id) for connection in connections]
     )
 
 
@@ -332,9 +326,7 @@ def list_match_history(
     account: Account,
 ) -> MatchHistoryListResponse:
     owned_case_ids = (
-        select(CaseAccount.case_id)
-        .where(CaseAccount.account_id == account.id)
-        .scalar_subquery()
+        select(CaseAccount.case_id).where(CaseAccount.account_id == account.id).scalar_subquery()
     )
     matches = db.scalars(
         select(CaseMatch)
@@ -621,12 +613,7 @@ def _match_history_out(
     found_owner = db.get(CaseAccount, match.found_case_id)
     missing_case = db.get(CaseRecord, match.missing_case_id)
     found_case = db.get(CaseRecord, match.found_case_id)
-    if (
-        missing_owner is None
-        or found_owner is None
-        or missing_case is None
-        or found_case is None
-    ):
+    if missing_owner is None or found_owner is None or missing_case is None or found_case is None:
         return None
 
     owns_missing = missing_owner.account_id == account_id
@@ -644,9 +631,7 @@ def _match_history_out(
         image_face_id = match.missing_face_id
 
     image_face = db.get(CaseFace, image_face_id)
-    connection = db.scalar(
-        select(MatchConnection).where(MatchConnection.case_match_id == match.id)
-    )
+    connection = db.scalar(select(MatchConnection).where(MatchConnection.case_match_id == match.id))
     return MatchHistoryOut(
         id=match.id,
         role=role,
@@ -657,9 +642,7 @@ def _match_history_out(
         score=match.score,
         decision=match.decision,
         image_url=(
-            get_store().presigned_url(image_face.image_key)
-            if image_face is not None
-            else None
+            get_store().presigned_url(image_face.image_key) if image_face is not None else None
         ),
         same_account=missing_owner.account_id == found_owner.account_id,
         connection_id=connection.id if connection is not None else None,
