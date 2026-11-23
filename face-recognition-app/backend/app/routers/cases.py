@@ -25,6 +25,7 @@ from app.case_service import (
     create_case_with_faces,
     delete_case,
     list_case_matches,
+    list_owned_cases,
     search_opposite_cases,
 )
 from app.connection_service import connection_ids_for_case
@@ -34,6 +35,7 @@ from app.images import decode_image, encode_jpeg
 from app.models import CaseAccount, CaseRecord
 from app.schemas import (
     CaseMatchesResponse,
+    OwnedCaseListResponse,
     CaseOut,
     CaseSubmissionResponse,
     CaseType,
@@ -41,6 +43,14 @@ from app.schemas import (
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
 MAX_CASE_PHOTOS = 5
+
+
+@router.get("", response_model=OwnedCaseListResponse)
+def get_cases(
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> OwnedCaseListResponse:
+    return list_owned_cases(db, account_id=principal.account.id)
 
 
 @router.post("", response_model=CaseSubmissionResponse, status_code=status.HTTP_201_CREATED)

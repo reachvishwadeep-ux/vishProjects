@@ -18,7 +18,15 @@ from app.connection_service import (
 )
 from app.face_engine import DetectedFace, get_engine
 from app.models import CaseAccount, CaseFace, CaseMatch, CaseRecord
-from app.schemas import CaseCandidate, CaseMatchesResponse, CaseSearchResult, CaseType
+from app.schemas import (
+    CaseCandidate,
+    CaseMatchesResponse,
+    CasePhotoOut,
+    CaseSearchResult,
+    CaseType,
+    OwnedCaseListResponse,
+    OwnedCaseOut,
+)
 from app.storage import get_store
 
 
@@ -278,6 +286,58 @@ def list_case_matches(db: Session, case: CaseRecord) -> CaseMatchesResponse:
             )
         )
     return CaseMatchesResponse(case_id=case.id, results=results)
+
+
+def list_owned_cases(
+    db: Session,
+    *,
+    account_id: uuid.UUID,
+) -> OwnedCaseListResponse:
+    owned_case_ids = (
+        select(CaseAccount.case_id)
+        .where(CaseAccount.account_id == account_id)
+        .scalar_subquery()
+    )
+    cases = db.scalars(
+        select(CaseRecord)
+        .where(CaseRecord.id.in_(owned_case_ids))
+        .order_by(CaseRecord.created_at.desc())
+    ).all()
+    store = get_store()
+    results: list[OwnedCaseOut] = []
+    for case in cases:
+        matches = db.scalars(
+            select(CaseMatch)
+            .where(
+                or_(
+                    CaseMatch.missing_case_id == case.id,
+                    CaseMatch.found_case_id == case.id,
+                )
+            )
+            .order_by(CaseMatch.score.desc())
+        ).all()
+        photos = sorted(case.faces, key=lambda face: face.created_at)
+        results.append(
+            OwnedCaseOut(
+                id=case.id,
+                case_type=CaseType(case.case_type),
+                subject_label=case.subject_label,
+                status=case.status,
+                created_at=case.created_at,
+                match_count=len(matches),
+                match_state="potential_match" if matches else "searching",
+                photos=[
+                    CasePhotoOut(
+                        id=face.id,
+                        image_url=store.presigned_url(face.image_key),
+                        quality=face.quality,
+                        created_at=face.created_at,
+                    )
+                    for face in photos
+                ],
+            )
+        )
+    return OwnedCaseListResponse(results=results)
 
 
 def delete_case(db: Session, case: CaseRecord) -> None:

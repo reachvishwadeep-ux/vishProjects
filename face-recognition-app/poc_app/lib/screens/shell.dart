@@ -4,8 +4,10 @@ import '../app_state.dart';
 import '../auth/auth_controller.dart';
 import '../connections/connection_repository.dart';
 import '../notifications/push_notification_controller.dart';
+import '../repository/case_repository.dart';
 import 'gallery_screen.dart';
 import 'match_screen.dart';
+import 'my_cases_screen.dart';
 import 'my_matches_screen.dart';
 import 'profile_screen.dart';
 
@@ -14,12 +16,14 @@ class AppShell extends StatefulWidget {
     super.key,
     required this.state,
     this.auth,
+    this.cases,
     this.connections,
     this.pushNotifications,
   });
 
   final AppState state;
   final AuthController? auth;
+  final CaseRepository? cases;
   final ConnectionRepository? connections;
   final PushNotificationController? pushNotifications;
 
@@ -57,7 +61,7 @@ class _AppShellState extends State<AppShell> {
     final connectionId = controller.takePendingConnectionId();
     final repository = widget.connections;
     if (connectionId == null || repository == null) return;
-    setState(() => _index = 1);
+    setState(() => _index = 2);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ConnectionDetailScreen(
@@ -79,6 +83,10 @@ class _AppShellState extends State<AppShell> {
             index: _index,
             children: [
               MatchScreen(state: widget.state),
+              MyCasesScreen(
+                repository: widget.cases,
+                active: _index == 1,
+              ),
               MyMatchesScreen(repository: widget.connections),
               GalleryScreen(state: widget.state),
               ProfileScreen(auth: widget.auth),
@@ -112,9 +120,14 @@ class _AppShellState extends State<AppShell> {
                     label: 'Upload',
                   ),
                   NavigationDestination(
+                    icon: Icon(Icons.folder_shared_outlined),
+                    selectedIcon: Icon(Icons.folder_shared_rounded),
+                    label: 'My Cases',
+                  ),
+                  NavigationDestination(
                     icon: Icon(Icons.favorite_border_rounded),
                     selectedIcon: Icon(Icons.favorite_rounded),
-                    label: 'My Matches',
+                    label: 'Matches',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.folder_copy_outlined),

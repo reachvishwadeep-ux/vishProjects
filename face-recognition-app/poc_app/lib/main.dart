@@ -12,6 +12,7 @@ import 'config.dart';
 import 'connections/connection_repository.dart';
 import 'matching/remote_matcher.dart';
 import 'notifications/push_notification_controller.dart';
+import 'repository/case_repository.dart';
 import 'repository/gallery_repository.dart';
 import 'screens/phone_auth_screen.dart';
 import 'screens/shell.dart';
@@ -32,6 +33,11 @@ Future<void> main() async {
     tokenProvider: authRepository.validAccessToken,
     onAuthenticationFailure: auth.logout,
   );
+  final cases = CaseRepository(
+    baseUrl: Config.apiBaseUrl,
+    tokenProvider: authRepository.validAccessToken,
+    onAuthenticationFailure: auth.logout,
+  );
   PushNotificationController? pushNotifications;
   if (Platform.isIOS || Platform.isAndroid) {
     try {
@@ -47,6 +53,7 @@ Future<void> main() async {
   runApp(
     PocApp(
       auth: auth,
+      cases: cases,
       connections: connections,
       installations: installations,
       pushNotifications: pushNotifications,
@@ -69,6 +76,7 @@ class PocApp extends StatefulWidget {
     super.key,
     required this.state,
     this.auth,
+    this.cases,
     this.connections,
     this.installations,
     this.pushNotifications,
@@ -76,6 +84,7 @@ class PocApp extends StatefulWidget {
 
   final AppState state;
   final AuthController? auth;
+  final CaseRepository? cases;
   final ConnectionRepository? connections;
   final InstallationRepository? installations;
   final PushNotificationController? pushNotifications;
@@ -147,7 +156,11 @@ class _PocAppState extends State<PocApp> {
       theme: buildTheme(Brightness.light),
       themeMode: ThemeMode.light,
       home: widget.auth == null
-          ? AppShell(state: widget.state, connections: widget.connections)
+          ? AppShell(
+              state: widget.state,
+              cases: widget.cases,
+              connections: widget.connections,
+            )
           : AnimatedBuilder(
               animation: widget.auth!,
               builder: (context, _) {
@@ -162,6 +175,7 @@ class _PocAppState extends State<PocApp> {
                 return AppShell(
                   state: widget.state,
                   auth: widget.auth,
+                  cases: widget.cases,
                   connections: widget.connections,
                   pushNotifications: widget.pushNotifications,
                 );

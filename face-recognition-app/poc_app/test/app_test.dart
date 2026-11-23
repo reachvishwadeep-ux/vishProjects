@@ -72,6 +72,11 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.tap(find.text('My Cases'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No uploaded cases yet'), findsOneWidget);
+
     await tester.tap(find.text('Saved Info'));
     await tester.pumpAndSettle();
 

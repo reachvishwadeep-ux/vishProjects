@@ -13,7 +13,7 @@ from app import case_service, reconciliation, storage
 from app.auth import require_principal
 from app.db import get_db
 from app.face_engine import DetectedFace
-from app.models import CaseReconciliationState
+from app.models import CaseFace, CaseMatch, CaseReconciliationState, CaseRecord
 from app.routers import cases
 from app.schemas import (
     CaseCandidate,
@@ -82,6 +82,119 @@ def test_case_submission_requires_authentication() -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"] == "valid authentication is required"
+
+
+def test_case_listing_requires_authentication() -> None:
+    app = FastAPI()
+    app.include_router(cases.router)
+    app.dependency_overrides[get_db] = lambda: object()
+
+    response = TestClient(app).get("/v1/cases")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "valid authentication is required"
+
+
+def test_owned_case_listing_includes_all_photos_and_match_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_at = datetime.now(UTC)
+    searching_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="missing",
+        subject_label="Missing person submission",
+        status="active",
+        created_at=created_at,
+    )
+    searching_case.faces = [
+        CaseFace(
+            id=uuid.uuid4(),
+            case_id=searching_case.id,
+            case_type="missing",
+            image_key="cases/searching/front.jpg",
+            bbox=[0, 0, 10, 10],
+            det_score=0.98,
+            quality=0.91,
+            model_tag="test",
+            embedding=[0.0] * 512,
+            created_at=created_at,
+        ),
+        CaseFace(
+            id=uuid.uuid4(),
+            case_id=searching_case.id,
+            case_type="missing",
+            image_key="cases/searching/profile.jpg",
+            bbox=[0, 0, 10, 10],
+            det_score=0.96,
+            quality=0.87,
+            model_tag="test",
+            embedding=[0.0] * 512,
+            created_at=created_at + timedelta(seconds=1),
+        ),
+    ]
+    matched_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="found",
+        subject_label="Found person submission",
+        status="active",
+        created_at=created_at - timedelta(days=1),
+    )
+    matched_case.faces = [
+        CaseFace(
+            id=uuid.uuid4(),
+            case_id=matched_case.id,
+            case_type="found",
+            image_key="cases/matched/front.jpg",
+            bbox=[0, 0, 10, 10],
+            det_score=0.99,
+            quality=0.94,
+            model_tag="test",
+            embedding=[0.0] * 512,
+            created_at=created_at - timedelta(days=1),
+        )
+    ]
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=uuid.uuid4(),
+        found_case_id=matched_case.id,
+        missing_face_id=uuid.uuid4(),
+        found_face_id=matched_case.faces[0].id,
+        score=0.82,
+        decision="match",
+        model_tag="test",
+    )
+    scalar_results = iter(
+        [
+            [searching_case, matched_case],
+            [],
+            [match],
+        ]
+    )
+
+    class FakeDb:
+        def scalars(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(all=lambda: next(scalar_results))
+
+    class FakeStore:
+        def presigned_url(self, key: str) -> str:
+            return f"https://images.example.com/{key}"
+
+    monkeypatch.setattr(case_service, "get_store", lambda: FakeStore())
+
+    response = case_service.list_owned_cases(
+        FakeDb(),
+        account_id=uuid.uuid4(),
+    )
+
+    assert len(response.results) == 2
+    searching, matched = response.results
+    assert searching.match_state == "searching"
+    assert searching.match_count == 0
+    assert len(searching.photos) == 2
+    assert searching.photos[1].image_url.endswith("/profile.jpg")
+    assert matched.match_state == "potential_match"
+    assert matched.match_count == 1
+    assert matched.case_type == CaseType.found
 
 
 def test_submission_contract_passes_missing_role_to_remote_case_service(

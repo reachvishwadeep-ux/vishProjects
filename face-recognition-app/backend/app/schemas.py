@@ -88,6 +88,23 @@ class CaseOut(BaseModel):
     created_at: datetime
 
 
+class CasePhotoOut(BaseModel):
+    id: uuid.UUID
+    image_url: str
+    quality: float | None
+    created_at: datetime
+
+
+class OwnedCaseOut(CaseOut):
+    match_count: int
+    match_state: str
+    photos: list[CasePhotoOut]
+
+
+class OwnedCaseListResponse(BaseModel):
+    results: list[OwnedCaseOut]
+
+
 class CaseMatchesResponse(BaseModel):
     case_id: uuid.UUID
     results: list[CaseCandidate]
