@@ -294,9 +294,7 @@ def list_owned_cases(
     account_id: uuid.UUID,
 ) -> OwnedCaseListResponse:
     owned_case_ids = (
-        select(CaseAccount.case_id)
-        .where(CaseAccount.account_id == account_id)
-        .scalar_subquery()
+        select(CaseAccount.case_id).where(CaseAccount.account_id == account_id).scalar_subquery()
     )
     cases = db.scalars(
         select(CaseRecord)
