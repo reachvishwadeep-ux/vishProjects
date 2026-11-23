@@ -35,10 +35,10 @@ from app.images import decode_image, encode_jpeg
 from app.models import CaseAccount, CaseRecord
 from app.schemas import (
     CaseMatchesResponse,
-    OwnedCaseListResponse,
     CaseOut,
     CaseSubmissionResponse,
     CaseType,
+    OwnedCaseListResponse,
 )
 
 router = APIRouter(prefix="/v1/cases", tags=["cases"])
