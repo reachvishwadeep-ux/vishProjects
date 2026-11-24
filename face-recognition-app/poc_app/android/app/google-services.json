@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:268234601841:android:961cf80a3d094e57deb2d0",
+        "mobilesdk_app_id": "1:268234601841:android:96570050d276afd2deb2d0",
         "android_client_info": {
-          "package_name": "com.facerec.poc_app"
+          "package_name": "com.vishwadeep.matchesnap"
         }
       },
       "oauth_client": [],
