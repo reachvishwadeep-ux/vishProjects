@@ -1,10 +1,6 @@
-import hashlib
-import hmac
-import re
-import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
@@ -42,8 +38,6 @@ from app.schemas import (
     MatchHistoryRole,
 )
 from app.storage import get_store
-
-MEETING_CODE_PATTERN = re.compile(r"^\d{6}$")
 
 
 @dataclass(frozen=True)
@@ -359,12 +353,12 @@ def consent_to_connection(
     else:
         connection.found_consented_at = connection.found_consented_at or now
 
-    if (
-        connection.missing_consented_at is not None
-        and connection.found_consented_at is not None
-        and not _codes_are_active(connection, now)
-    ):
-        _rotate_meeting_codes(connection, now)
+    if connection.missing_consented_at is not None and connection.found_consented_at is not None:
+        connection.meeting_nonce = None
+        connection.meeting_code_expires_at = None
+        connection.missing_verified_peer_at = None
+        connection.found_verified_peer_at = None
+        connection.status = "connected"
     _mark_notification_read(db, connection.id, account.id, now)
     _audit(db, account, "connection_consented", connection.id)
     db.commit()
@@ -378,17 +372,11 @@ def renew_meeting_codes(
     connection_id: uuid.UUID,
     account: Account,
 ) -> ConnectionOut:
-    connection = _participant_connection(db, connection_id, account.id)
-    if connection.missing_consented_at is None or connection.found_consented_at is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="both parties must consent before meeting codes are issued",
-        )
-    _rotate_meeting_codes(connection, datetime.now(UTC))
-    _audit(db, account, "meeting_codes_renewed", connection.id)
-    db.commit()
-    db.refresh(connection)
-    return _connection_out(db, connection, account.id)
+    _participant_connection(db, connection_id, account.id)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="meeting-code verification is no longer available",
+    )
 
 
 def withdraw_connection_consent(
@@ -420,70 +408,11 @@ def verify_peer_meeting_code(
     account: Account,
     code: str,
 ) -> ConnectionOut:
-    connection = _participant_connection(db, connection_id, account.id)
-    normalized_code = code.strip()
-    if not MEETING_CODE_PATTERN.fullmatch(normalized_code):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="meeting code must contain six digits",
-        )
-    now = datetime.now(UTC)
-    if not _codes_are_active(connection, now):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="meeting code is unavailable or expired",
-        )
-
-    if account.id == connection.missing_account_id:
-        if connection.missing_verified_peer_at is not None:
-            _audit(db, account, "meeting_code_replay_rejected", connection.id)
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="meeting code was already verified",
-            )
-        peer_account_id = connection.found_account_id
-    else:
-        if connection.found_verified_peer_at is not None:
-            _audit(db, account, "meeting_code_replay_rejected", connection.id)
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="meeting code was already verified",
-            )
-        peer_account_id = connection.missing_account_id
-
-    if not hmac.compare_digest(
-        normalized_code,
-        _meeting_code(connection, peer_account_id),
-    ):
-        _audit(db, account, "meeting_code_rejected", connection.id)
-        record_repeated_failure_risk(
-            db,
-            account_id=account.id,
-            event_type="meeting_code_rejected",
-            risk_type="repeated_incorrect_meeting_codes",
-            data={"connection_id": str(connection.id)},
-        )
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="incorrect meeting code",
-        )
-
-    if account.id == connection.missing_account_id:
-        connection.missing_verified_peer_at = now
-    else:
-        connection.found_verified_peer_at = now
-    if (
-        connection.missing_verified_peer_at is not None
-        and connection.found_verified_peer_at is not None
-    ):
-        connection.status = "verified"
-    _audit(db, account, "meeting_code_verified", connection.id)
-    db.commit()
-    db.refresh(connection)
-    return _connection_out(db, connection, account.id)
+    _participant_connection(db, connection_id, account.id)
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="meeting-code verification is no longer available",
+    )
 
 
 def mark_connection_read(
@@ -579,11 +508,6 @@ def _connection_out(
         if is_missing
         else connection.missing_verified_peer_at is not None
     )
-    own_code_consumed = other_verified_peer
-    now = datetime.now(UTC)
-    meeting_code = None
-    if not own_code_consumed and _codes_are_active(connection, now):
-        meeting_code = _meeting_code(connection, account_id)
     return ConnectionOut(
         id=connection.id,
         role=(ConnectionRole.missing if is_missing else ConnectionRole.found),
@@ -598,8 +522,8 @@ def _connection_out(
         my_verified_peer=my_verified_peer,
         other_verified_peer=other_verified_peer,
         unread=notification is not None and notification.read_at is None,
-        meeting_code=meeting_code,
-        meeting_code_expires_at=connection.meeting_code_expires_at,
+        meeting_code=None,
+        meeting_code_expires_at=None,
         created_at=connection.created_at,
     )
 
@@ -651,45 +575,6 @@ def _match_history_out(
     )
 
 
-def _rotate_meeting_codes(
-    connection: MatchConnection,
-    now: datetime,
-) -> None:
-    connection.meeting_nonce = secrets.token_hex(16)
-    connection.meeting_code_expires_at = now + timedelta(
-        seconds=get_settings().meeting_code_ttl_seconds
-    )
-    connection.missing_verified_peer_at = None
-    connection.found_verified_peer_at = None
-    connection.status = "ready_to_meet"
-
-
-def _codes_are_active(
-    connection: MatchConnection,
-    now: datetime,
-) -> bool:
-    return (
-        connection.meeting_nonce is not None
-        and connection.meeting_code_expires_at is not None
-        and _as_utc(connection.meeting_code_expires_at) > now
-    )
-
-
-def _meeting_code(
-    connection: MatchConnection,
-    account_id: uuid.UUID,
-) -> str:
-    if connection.meeting_nonce is None:
-        raise RuntimeError("meeting codes have not been issued")
-    value = f"{connection.id}:{connection.meeting_nonce}:{account_id}".encode()
-    digest = hmac.new(
-        get_settings().meeting_code_secret.encode(),
-        value,
-        hashlib.sha256,
-    ).digest()
-    return f"{int.from_bytes(digest[:8], 'big') % 1_000_000:06d}"
-
-
 def _mark_notification_read(
     db: Session,
     connection_id: uuid.UUID,
@@ -720,7 +605,3 @@ def _audit(
             event_data={"connection_id": str(connection_id)},
         )
     )
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)

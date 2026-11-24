@@ -147,8 +147,8 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                 const _SectionHeading(
                   title: 'Secure connections',
                   message:
-                      'Cross-account matches with consent and meeting-code '
-                      'safeguards.',
+                      'Cross-account matches with mutual consent and private '
+                      'contact details.',
                 ),
                 const SizedBox(height: 12),
                 ..._connections.map(
@@ -315,8 +315,8 @@ class _PrivacyBanner extends StatelessWidget {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Phone numbers and precise locations are never shown. '
-                  'Both parties must consent before meeting codes appear.',
+                  'Phone numbers and precise locations stay private. '
+                  'Both parties must consent before a connection is active.',
                   style: TextStyle(
                     color: Color(0xE6FFFFFF),
                     fontSize: 12,
@@ -484,15 +484,8 @@ class _ConnectionCard extends StatefulWidget {
 }
 
 class _ConnectionCardState extends State<_ConnectionCard> {
-  final _codeController = TextEditingController();
   String? _error;
   var _busy = false;
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    super.dispose();
-  }
 
   Future<void> _act(
     Future<MatchConnection> Function() action,
@@ -506,7 +499,6 @@ class _ConnectionCardState extends State<_ConnectionCard> {
       final connection = await action();
       widget.onChanged(connection);
       if (!mounted) return;
-      _codeController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(successMessage)),
       );
@@ -588,10 +580,10 @@ class _ConnectionCardState extends State<_ConnectionCard> {
                       ? null
                       : () => _act(
                             () => widget.repository.consent(connection.id),
-                            'Your consent was recorded.',
+                            'Your consent to connect was recorded.',
                           ),
                   icon: const Icon(Icons.handshake_outlined, size: 19),
-                  label: const Text('Consent to a safe meeting'),
+                  label: const Text('Consent to connect'),
                 ),
               )
             else if (!connection.otherConsented)
@@ -600,21 +592,11 @@ class _ConnectionCardState extends State<_ConnectionCard> {
                 text: 'Waiting for the other party to consent.',
               )
             else
-              _MeetingCodePanel(
-                connection: connection,
-                codeController: _codeController,
-                busy: _busy,
-                onVerify: () => _act(
-                  () => widget.repository.verifyMeetingCode(
-                    connection.id,
-                    _codeController.text,
-                  ),
-                  'The other party’s code was verified.',
-                ),
-                onRenew: () => _act(
-                  () => widget.repository.renewMeetingCode(connection.id),
-                  'New meeting codes are ready.',
-                ),
+              const _InlineNotice(
+                icon: Icons.handshake_rounded,
+                text: 'Both parties consented. Phone numbers remain private; '
+                    'messaging and contact sharing are not enabled yet.',
+                success: true,
               ),
             if (connection.myConsented) ...[
               const SizedBox(height: 5),
@@ -627,7 +609,7 @@ class _ConnectionCardState extends State<_ConnectionCard> {
                             () => widget.repository.withdrawConsent(
                               connection.id,
                             ),
-                            'Your consent was withdrawn and codes were revoked.',
+                            'Your consent was withdrawn.',
                           ),
                   icon: const Icon(Icons.block_rounded, size: 16),
                   label: const Text('Withdraw consent'),
@@ -662,10 +644,9 @@ class _ConnectionCardState extends State<_ConnectionCard> {
             ],
             const SizedBox(height: 12),
             const Text(
-              'Face similarity is only a candidate signal. Meeting codes '
-              'confirm account presence—not identity, guardianship, custody, '
-              'or a safe child handoff. Never transfer a child based on the '
-              'app alone.',
+              'Face similarity and mutual consent do not prove identity, '
+              'guardianship, custody, or a safe child handoff. Never transfer '
+              'a child based on the app alone.',
               style: TextStyle(
                 color: brandMuted,
                 fontSize: 10.5,
@@ -756,124 +737,6 @@ class _ProgressItem extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MeetingCodePanel extends StatelessWidget {
-  const _MeetingCodePanel({
-    required this.connection,
-    required this.codeController,
-    required this.busy,
-    required this.onVerify,
-    required this.onRenew,
-  });
-
-  final MatchConnection connection;
-  final TextEditingController codeController;
-  final bool busy;
-  final VoidCallback onVerify;
-  final VoidCallback onRenew;
-
-  @override
-  Widget build(BuildContext context) {
-    if (connection.status == 'verified') {
-      return const _InlineNotice(
-        icon: Icons.verified_user_rounded,
-        text: 'Both parties verified each other’s one-time meeting code.',
-        success: true,
-      );
-    }
-    final code = connection.meetingCode;
-    final expiresAt = connection.meetingCodeExpiresAt;
-    final activeCodeWasConsumed = code == null &&
-        connection.otherVerifiedPeer &&
-        expiresAt != null &&
-        expiresAt.isAfter(DateTime.now());
-    if (code == null && !activeCodeWasConsumed) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _InlineNotice(
-            icon: Icons.timer_off_outlined,
-            text: 'The meeting codes expired or were already used.',
-          ),
-          const SizedBox(height: 9),
-          OutlinedButton.icon(
-            onPressed: busy ? null : onRenew,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Create new meeting codes'),
-          ),
-        ],
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: brandLavender,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (code != null) ...[
-            const Text(
-              'YOUR ONE-TIME CODE',
-              style: TextStyle(
-                color: brandPurple,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .6,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              code,
-              style: const TextStyle(
-                color: brandInk,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 7,
-              ),
-            ),
-            Text(
-              _expiryText(expiresAt),
-              style: const TextStyle(color: brandMuted, fontSize: 10),
-            ),
-          ] else ...[
-            const _InlineNotice(
-              icon: Icons.verified_outlined,
-              text:
-                  'The other party verified your code. Enter their code to complete verification.',
-              success: true,
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: codeController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            decoration: const InputDecoration(
-              labelText: 'Other party’s code',
-              hintText: '000000',
-              counterText: '',
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.tonalIcon(
-              onPressed: busy || connection.myVerifiedPeer ? null : onVerify,
-              icon: const Icon(Icons.key_rounded),
-              label: Text(
-                connection.myVerifiedPeer
-                    ? 'Other code verified'
-                    : 'Verify other code',
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -997,24 +860,14 @@ class _StateCard extends StatelessWidget {
 
 String _statusLabel(String status) {
   return switch (status) {
-    'ready_to_meet' => 'CODES READY',
-    'verified' => 'VERIFIED',
+    'connected' || 'ready_to_meet' || 'verified' => 'CONNECTED',
     _ => 'CONSENT',
   };
 }
 
 Color _statusColor(String status) {
   return switch (status) {
-    'verified' => brandGreen,
-    'ready_to_meet' => brandPurple,
+    'connected' || 'ready_to_meet' || 'verified' => brandGreen,
     _ => brandMuted,
   };
-}
-
-String _expiryText(DateTime? expiresAt) {
-  if (expiresAt == null) return 'Short-lived code';
-  final remaining = expiresAt.difference(DateTime.now());
-  if (remaining.isNegative) return 'Expired';
-  final minutes = remaining.inMinutes + 1;
-  return 'Expires in about $minutes minute${minutes == 1 ? '' : 's'}';
 }

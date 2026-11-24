@@ -103,9 +103,8 @@ duplicated. Configure it with `RECONCILIATION_ENABLED`,
 
 When a high-scoring missing/found pair belongs to two different accounts, the API
 creates a private in-app connection notification. Both accounts must consent before
-the server derives distinct six-digit meeting codes. Codes expire after 15 minutes,
-are never stored in plaintext, and are revoked if either party withdraws consent.
-Phone numbers and precise locations are not included in connection responses.
+the connection becomes active. Phone numbers and precise locations are not included
+in connection responses. Messaging and contact sharing are not currently enabled.
 
 Bulk-ingest an existing repository (`repository/<person_name>/*.jpg`):
 
@@ -128,10 +127,10 @@ docker compose exec api python -m scripts.ingest /data/repository
 | `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for an owned case. |
 | `DELETE /v1/cases/{id}` | Delete an owned case, its embedding, stored photo, and candidate links. |
 | `GET /v1/connections` | List the authenticated account's private match notifications and consent state. |
-| `POST /v1/connections/{id}/consent` | Consent to the connection; meeting codes activate after mutual consent. |
-| `POST /v1/connections/{id}/withdraw-consent` | Withdraw consent and immediately revoke active meeting codes. |
-| `POST /v1/connections/{id}/meeting-code/verify` | Verify the other participant's short-lived code once. |
-| `POST /v1/connections/{id}/meeting-code/renew` | Rotate expired or used meeting codes after mutual consent. |
+| `POST /v1/connections/{id}/consent` | Consent to the private connection; it becomes active after mutual consent. |
+| `POST /v1/connections/{id}/withdraw-consent` | Withdraw consent and return the connection to pending state. |
+| `POST /v1/connections/{id}/meeting-code/verify` | Deprecated; returns HTTP 410 because meeting-code verification is disabled. |
+| `POST /v1/connections/{id}/meeting-code/renew` | Deprecated; returns HTTP 410 because meeting-code verification is disabled. |
 | `POST /v1/audit/installations/register` | Register a random app-installation instance on first launch. This is not proof of an App Store or Play Store installation. |
 | `POST /v1/audit/installations/bind` | Link the installation instance to the current authenticated account. |
 | `GET /v1/audit/summary` | Privileged counts for installations, uploads, matches and risk alerts. Requires `X-Audit-Admin-Key`. |
@@ -154,10 +153,10 @@ face/photo ID, quality result and match decision. Rejected uploads record only t
 role and reason. Confirmed candidate matches link both case IDs and both face IDs with
 the score, model tag and whether matching happened immediately or during scheduled
 reconciliation. Audit metadata never contains photo bytes, raw OTPs, refresh tokens,
-plaintext meeting codes, precise locations or unmasked phone numbers.
+precise locations or unmasked phone numbers.
 
 Structured `risk_alert` events identify reviewable patterns without asserting criminal
-intent: repeated OTP/code failures, upload bursts, repeated rejected uploads,
+intent: repeated OTP failures, upload bursts, repeated rejected uploads,
 missing/found role switching, one account matching its own opposite-role cases,
 unlinked installation uploads, excessive installation counts and repeated unauthorized
 case/connection access. These are evidence for authorized review, not trafficking
@@ -225,9 +224,9 @@ a human instead of being asserted as matches.
   `OTP_DELIVERY_MODE=telnyx_verify`, and Twilio remains an optional fallback with
   `OTP_DELIVERY_MODE=twilio_verify`. HTTPS, upload rate limits, and stricter role/case
   authorization are still required before production.
-- Face similarity and a successful meeting-code exchange do not prove identity,
-  guardianship, custody, intent, or a safe child handoff. They must never
-  automatically authorize a child transfer.
+- Face similarity and mutual consent do not prove identity, guardianship, custody,
+  intent, or a safe child handoff. They must never automatically authorize a child
+  transfer.
 
 ## Development
 

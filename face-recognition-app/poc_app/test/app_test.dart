@@ -240,7 +240,7 @@ void main() {
     expect(find.text('Secure connection'), findsOneWidget);
     expect(find.text('Possible found-person case'), findsOneWidget);
     expect(find.text('Unrelated case'), findsNothing);
-    expect(find.text('Consent to a safe meeting'), findsOneWidget);
+    expect(find.text('Consent to connect'), findsOneWidget);
     expect(
       find.text('Secure contact requests are not enabled yet.'),
       findsNothing,

@@ -327,7 +327,7 @@ def test_match_history_links_cross_account_secure_connection(
     assert result.connection_status == "pending_consent"
 
 
-def test_mutual_consent_issues_distinct_short_lived_codes(
+def test_mutual_consent_connects_without_meeting_codes(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:
     db, missing_account, found_account, connection = connection_fixture
@@ -341,115 +341,46 @@ def test_mutual_consent_issues_distinct_short_lived_codes(
     assert missing_pending.other_consented is False
     assert missing_pending.meeting_code is None
 
-    found_ready = connection_service.consent_to_connection(
+    found_connected = connection_service.consent_to_connection(
         db,
         connection_id=connection.id,
         account=found_account,
     )
-    missing_ready = connection_service.consent_to_connection(
+    missing_connected = connection_service.consent_to_connection(
         db,
         connection_id=connection.id,
         account=missing_account,
     )
 
-    assert found_ready.status == "ready_to_meet"
-    assert found_ready.meeting_code is not None
-    assert missing_ready.meeting_code is not None
-    assert found_ready.meeting_code != missing_ready.meeting_code
-    assert found_ready.meeting_code_expires_at is not None
+    assert found_connected.status == "connected"
+    assert missing_connected.status == "connected"
+    assert found_connected.meeting_code is None
+    assert missing_connected.meeting_code is None
+    assert found_connected.meeting_code_expires_at is None
+    assert connection.meeting_nonce is None
+    assert connection.meeting_code_expires_at is None
 
 
-def test_each_party_verifies_the_other_partys_code_once(
+def test_meeting_code_renewal_is_disabled(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:
-    db, missing_account, found_account, connection = connection_fixture
-    connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=missing_account,
-    )
-    found_ready = connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=found_account,
-    )
-    missing_ready = connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=missing_account,
-    )
-    missing_verified = connection_service.verify_peer_meeting_code(
-        db,
-        connection_id=connection.id,
-        account=missing_account,
-        code=found_ready.meeting_code or "",
-    )
-    found_verified = connection_service.verify_peer_meeting_code(
-        db,
-        connection_id=connection.id,
-        account=found_account,
-        code=missing_ready.meeting_code or "",
-    )
-
-    assert missing_verified.my_verified_peer is True
-    assert found_verified.status == "verified"
-    assert found_verified.my_verified_peer is True
-    assert found_verified.other_verified_peer is True
-    assert found_verified.meeting_code is None
-
-
-def test_replayed_meeting_code_is_rejected_and_audited(
-    connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
-) -> None:
-    db, missing_account, found_account, connection = connection_fixture
-    connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=missing_account,
-    )
-    connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=found_account,
-    )
-    missing_ready = connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=missing_account,
-    )
-    connection_service.verify_peer_meeting_code(
-        db,
-        connection_id=connection.id,
-        account=found_account,
-        code=missing_ready.meeting_code or "",
-    )
+    db, missing_account, _, connection = connection_fixture
 
     with pytest.raises(HTTPException) as error:
-        connection_service.verify_peer_meeting_code(
+        connection_service.renew_meeting_codes(
             db,
             connection_id=connection.id,
-            account=found_account,
-            code=missing_ready.meeting_code or "",
+            account=missing_account,
         )
 
-    assert error.value.status_code == 409
-    assert db.audit_events[-1].event_type == "meeting_code_replay_rejected"
+    assert error.value.status_code == 410
+    assert error.value.detail == "meeting-code verification is no longer available"
 
 
-def test_incorrect_code_is_rejected_and_audited(
+def test_meeting_code_verification_is_disabled(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:
-    db, missing_account, found_account, connection = connection_fixture
-    connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=missing_account,
-    )
-    connection_service.consent_to_connection(
-        db,
-        connection_id=connection.id,
-        account=found_account,
-    )
+    db, missing_account, _, connection = connection_fixture
 
     with pytest.raises(HTTPException) as error:
         connection_service.verify_peer_meeting_code(
@@ -459,8 +390,8 @@ def test_incorrect_code_is_rejected_and_audited(
             code="999999",
         )
 
-    assert error.value.status_code == 400
-    assert db.audit_events[-1].event_type == "meeting_code_rejected"
+    assert error.value.status_code == 410
+    assert error.value.detail == "meeting-code verification is no longer available"
 
 
 def test_new_match_audit_links_both_photos_and_matching_source(
@@ -998,7 +929,7 @@ def test_match_push_failure_does_not_block_other_installations(
     assert installations[0].push_enabled is True
 
 
-def test_withdrawing_consent_revokes_meeting_codes(
+def test_withdrawing_consent_disconnects_the_parties(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:
     db, missing_account, found_account, connection = connection_fixture

@@ -297,7 +297,8 @@ class _MatchFoundResult extends StatelessWidget {
                 ),
                 const Divider(height: 26),
                 const Text(
-                  'Contact details stay hidden. Both people must consent before one-time meeting codes appear.',
+                  'Contact details stay private. Both people must consent '
+                  'before the connection becomes active.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: brandMuted,

@@ -22,7 +22,7 @@ registry.
    `FIREBASE_SERVICE_ACCOUNT_JSON`, then enable push delivery. Match alerts
    contain only `Potential match—open ReuniteNow.` and a connection ID for
    in-app navigation; they never include case data, scores, photos, phone
-   numbers, or meeting codes.
+   numbers, or private contact details.
 
 ## Start
 

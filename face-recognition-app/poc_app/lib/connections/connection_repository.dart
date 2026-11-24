@@ -12,13 +12,9 @@ class MatchConnection {
     required this.score,
     required this.myConsented,
     required this.otherConsented,
-    required this.myVerifiedPeer,
-    required this.otherVerifiedPeer,
     required this.unread,
     required this.createdAt,
     this.imageUrl,
-    this.meetingCode,
-    this.meetingCodeExpiresAt,
   });
 
   factory MatchConnection.fromJson(Map<String, Object?> json) {
@@ -31,15 +27,7 @@ class MatchConnection {
       imageUrl: json['image_url'] as String?,
       myConsented: json['my_consented']! as bool,
       otherConsented: json['other_consented']! as bool,
-      myVerifiedPeer: json['my_verified_peer']! as bool,
-      otherVerifiedPeer: json['other_verified_peer']! as bool,
       unread: json['unread']! as bool,
-      meetingCode: json['meeting_code'] as String?,
-      meetingCodeExpiresAt: json['meeting_code_expires_at'] == null
-          ? null
-          : DateTime.parse(
-              json['meeting_code_expires_at']! as String,
-            ).toLocal(),
       createdAt: DateTime.parse(json['created_at']! as String).toLocal(),
     );
   }
@@ -52,11 +40,7 @@ class MatchConnection {
   final String? imageUrl;
   final bool myConsented;
   final bool otherConsented;
-  final bool myVerifiedPeer;
-  final bool otherVerifiedPeer;
   final bool unread;
-  final String? meetingCode;
-  final DateTime? meetingCodeExpiresAt;
   final DateTime createdAt;
 }
 
@@ -155,21 +139,6 @@ class ConnectionRepository {
 
   Future<MatchConnection> withdrawConsent(String connectionId) =>
       _action('/v1/connections/$connectionId/withdraw-consent');
-
-  Future<MatchConnection> renewMeetingCode(String connectionId) =>
-      _action('/v1/connections/$connectionId/meeting-code/renew');
-
-  Future<MatchConnection> verifyMeetingCode(
-    String connectionId,
-    String code,
-  ) async {
-    final payload = await _request(
-      'POST',
-      '/v1/connections/$connectionId/meeting-code/verify',
-      body: {'code': code},
-    );
-    return MatchConnection.fromJson(payload);
-  }
 
   Future<MatchConnection> _action(String path) async {
     final payload = await _request('POST', path);
