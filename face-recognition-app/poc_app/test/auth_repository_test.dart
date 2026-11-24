@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:phone_form_field/phone_form_field.dart';
 import 'package:poc_app/auth/auth_controller.dart';
 import 'package:poc_app/auth/auth_repository.dart';
 import 'package:poc_app/screens/phone_auth_screen.dart';
@@ -109,6 +110,17 @@ void main() {
     expect(store.values['matchsnap_installation_id'], 'installation-id');
   });
 
+  test('formats supported national numbers as E.164', () {
+    expect(
+      const PhoneNumber(isoCode: IsoCode.IN, nsn: '9876543210').international,
+      '+919876543210',
+    );
+    expect(
+      const PhoneNumber(isoCode: IsoCode.US, nsn: '5202250867').international,
+      '+15202250867',
+    );
+  });
+
   testWidgets('phone screen completes the development OTP flow',
       (tester) async {
     final repository = AuthRepository(
@@ -116,6 +128,7 @@ void main() {
       tokenStore: MemoryTokenStore(),
       client: MockClient((request) async {
         if (request.url.path.endsWith('/otp/request')) {
+          expect(jsonDecode(request.body)['phone_number'], '+919876543210');
           return http.Response(
             jsonEncode({
               'challenge_id': 'challenge-id',
@@ -125,16 +138,21 @@ void main() {
             202,
           );
         }
+        expect(jsonDecode(request.body)['phone_number'], '+919876543210');
         return http.Response(jsonEncode(_tokens('refresh-one')), 200);
       }),
     );
     final controller = AuthController(repository: repository);
     await controller.initialize();
     await tester.pumpWidget(
-      MaterialApp(home: PhoneAuthScreen(controller: controller)),
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
     );
 
-    await tester.enterText(find.byType(TextField).first, '+919876543210');
+    await tester.enterText(find.byType(TextField).first, '98765 43210');
     await tester.tap(find.text('Send verification code'));
     await tester.pumpAndSettle();
 
@@ -145,5 +163,35 @@ void main() {
 
     expect(controller.authenticated, isTrue);
     expect(controller.account?.phoneNumber, '+919876543210');
+  });
+
+  testWidgets('phone screen rejects an invalid number before the API request',
+      (tester) async {
+    var requestCount = 0;
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async {
+        requestCount += 1;
+        return http.Response('{}', 500);
+      }),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, '123');
+    await tester.tap(find.text('Send verification code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enter a valid mobile number.'), findsOneWidget);
+    expect(find.text('Local demo code: 123456'), findsNothing);
+    expect(requestCount, 0);
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phone_form_field/phone_form_field.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_repository.dart';
@@ -15,9 +16,13 @@ class PhoneAuthScreen extends StatefulWidget {
 }
 
 class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
-  final _phoneController = TextEditingController(text: '+91');
+  final _phoneFormKey = GlobalKey<FormState>();
+  final _phoneController = PhoneController(
+    initialValue: const PhoneNumber(isoCode: IsoCode.IN, nsn: ''),
+  );
   final _codeController = TextEditingController();
   OtpChallenge? _challenge;
+  String? _requestedPhoneNumber;
 
   @override
   void dispose() {
@@ -27,23 +32,29 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   }
 
   Future<void> _requestOtp() async {
-    final challenge = await widget.controller.requestOtp(_phoneController.text);
+    if (!(_phoneFormKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    final phoneNumber = _phoneController.value.international;
+    final challenge = await widget.controller.requestOtp(phoneNumber);
     if (!mounted || challenge == null) {
       return;
     }
     setState(() {
       _challenge = challenge;
+      _requestedPhoneNumber = phoneNumber;
       _codeController.text = challenge.developmentCode ?? '';
     });
   }
 
   Future<void> _verifyOtp() async {
     final challenge = _challenge;
-    if (challenge == null) {
+    final phoneNumber = _requestedPhoneNumber;
+    if (challenge == null || phoneNumber == null) {
       return;
     }
     await widget.controller.verifyOtp(
-      phoneNumber: _phoneController.text,
+      phoneNumber: phoneNumber,
       challengeId: challenge.id,
       code: _codeController.text,
     );
@@ -94,7 +105,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                 Text(
                   _challenge == null
                       ? 'ReuniteNow uses your phone number to protect photo submissions and matches.'
-                      : 'Use the six-digit code sent for ${_phoneController.text}.',
+                      : 'Use the six-digit code sent for $_requestedPhoneNumber.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: brandMuted,
@@ -103,16 +114,38 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                 ),
                 const SizedBox(height: 32),
                 if (_challenge == null) ...[
-                  TextField(
-                    controller: _phoneController,
-                    enabled: !widget.controller.busy,
-                    keyboardType: TextInputType.phone,
-                    autofillHints: const [AutofillHints.telephoneNumber],
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile number',
-                      hintText: '+919876543210',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      helperText: 'Include country code, for example +91.',
+                  Form(
+                    key: _phoneFormKey,
+                    child: PhoneFormField(
+                      controller: _phoneController,
+                      enabled: !widget.controller.busy,
+                      autofillHints: const [AutofillHints.telephoneNumber],
+                      countrySelectorNavigator:
+                          const CountrySelectorNavigator.modalBottomSheet(
+                        favorites: [IsoCode.IN, IsoCode.US],
+                      ),
+                      countryButtonStyle: const CountryButtonStyle(
+                        showDialCode: true,
+                        showIsoCode: true,
+                        showFlag: true,
+                        flagSize: 18,
+                      ),
+                      validator: PhoneValidator.compose([
+                        PhoneValidator.required(
+                          context,
+                          errorText: 'Enter a mobile number.',
+                        ),
+                        PhoneValidator.valid(
+                          context,
+                          errorText: 'Enter a valid mobile number.',
+                        ),
+                      ]),
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile number',
+                        hintText: '98765 43210',
+                        helperText:
+                            'Choose the country, then enter the local number.',
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -170,6 +203,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                         : () {
                             setState(() {
                               _challenge = null;
+                              _requestedPhoneNumber = null;
                               _codeController.clear();
                             });
                           },

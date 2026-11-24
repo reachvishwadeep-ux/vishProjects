@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:phone_form_field/phone_form_field.dart';
 
 import 'app_state.dart';
 import 'audit/installation_repository.dart';
@@ -153,6 +154,8 @@ class _PocAppState extends State<PocApp> {
     return MaterialApp(
       title: 'ReuniteNow',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: PhoneFieldLocalization.delegates,
+      supportedLocales: const [Locale('en')],
       theme: buildTheme(Brightness.light),
       themeMode: ThemeMode.light,
       home: widget.auth == null
