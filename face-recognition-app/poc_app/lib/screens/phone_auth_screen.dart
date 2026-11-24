@@ -129,7 +129,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                     child: PhoneFormField(
                       controller: _phoneController,
                       enabled: !widget.controller.busy,
-                      autofillHints: const [AutofillHints.telephoneNumber],
+                      autofillHints: const [
+                        AutofillHints.telephoneNumberNational,
+                      ],
                       inputFormatters: _nationalPhoneInputFormatters,
                       countrySelectorNavigator:
                           const CountrySelectorNavigator.modalBottomSheet(

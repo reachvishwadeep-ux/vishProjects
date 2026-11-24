@@ -152,6 +152,10 @@ void main() {
       ),
     );
 
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).autofillHints,
+      contains(AutofillHints.telephoneNumberNational),
+    );
     await tester.enterText(find.byType(TextField).first, '98765 43210');
     await tester.tap(find.text('Send verification code'));
     await tester.pumpAndSettle();
