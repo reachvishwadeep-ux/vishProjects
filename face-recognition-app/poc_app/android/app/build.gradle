@@ -12,15 +12,6 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
-def isReleaseBuild = gradle.startParameter.taskNames.any {
-    it.toLowerCase().contains("release")
-}
-if (isReleaseBuild && !keystorePropertiesFile.exists()) {
-    throw new GradleException(
-        "Android release signing requires android/key.properties."
-    )
-}
-
 android {
     namespace = "com.vishwadeep.matchesnap"
     compileSdk = flutter.compileSdkVersion
