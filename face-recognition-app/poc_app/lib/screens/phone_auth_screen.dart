@@ -6,6 +6,16 @@ import '../auth/auth_controller.dart';
 import '../auth/auth_repository.dart';
 import '../theme.dart';
 
+final _nationalPhoneInputFormatters = [
+  TextInputFormatter.withFunction(
+    (oldValue, newValue) =>
+        newValue.text.contains(RegExp('[+＋]')) ? oldValue : newValue,
+  ),
+  FilteringTextInputFormatter.allow(
+    RegExp(r'[0-9０-９٠-٩۰-۹ ()\[\]\-\.\/\\]'),
+  ),
+];
+
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key, required this.controller});
 
@@ -120,6 +130,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                       controller: _phoneController,
                       enabled: !widget.controller.busy,
                       autofillHints: const [AutofillHints.telephoneNumber],
+                      inputFormatters: _nationalPhoneInputFormatters,
                       countrySelectorNavigator:
                           const CountrySelectorNavigator.modalBottomSheet(
                         favorites: [IsoCode.IN, IsoCode.US],

@@ -194,4 +194,58 @@ void main() {
     expect(find.text('Local demo code: 123456'), findsNothing);
     expect(requestCount, 0);
   });
+
+  testWidgets('phone screen rejects international text in the national field',
+      (tester) async {
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async => http.Response('{}', 500)),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    final phoneField = find.byType(TextField).first;
+    await tester.enterText(phoneField, '(+44) 7400 123456');
+    await tester.pump();
+
+    expect(tester.widget<TextField>(phoneField).controller!.text, isEmpty);
+  });
+
+  testWidgets('phone screen rejects an incomplete plus edit', (tester) async {
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async => http.Response('{}', 500)),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    final phoneField = find.byType(TextField).first;
+    await tester.enterText(phoneField, '9876543210');
+    await tester.pump();
+    final validText = tester.widget<TextField>(phoneField).controller!.text;
+
+    await tester.enterText(phoneField, '+');
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(phoneField).controller!.text,
+      validText,
+    );
+  });
 }
