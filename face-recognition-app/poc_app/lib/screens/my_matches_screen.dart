@@ -758,7 +758,7 @@ class _MatchedPhoto extends StatelessWidget {
                     )
                   : Image.network(
                       imageUrl!,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Center(
                         child: Icon(
                           Icons.broken_image_outlined,
