@@ -12,9 +12,12 @@ class MatchConnection {
     required this.score,
     required this.myConsented,
     required this.otherConsented,
+    required this.myContactSharingConsented,
+    required this.otherContactSharingConsented,
     required this.unread,
     required this.createdAt,
     this.imageUrl,
+    this.otherPhoneNumber,
   });
 
   factory MatchConnection.fromJson(Map<String, Object?> json) {
@@ -27,6 +30,11 @@ class MatchConnection {
       imageUrl: json['image_url'] as String?,
       myConsented: json['my_consented']! as bool,
       otherConsented: json['other_consented']! as bool,
+      myContactSharingConsented:
+          json['my_contact_sharing_consented'] as bool? ?? false,
+      otherContactSharingConsented:
+          json['other_contact_sharing_consented'] as bool? ?? false,
+      otherPhoneNumber: json['other_phone_number'] as String?,
       unread: json['unread']! as bool,
       createdAt: DateTime.parse(json['created_at']! as String).toLocal(),
     );
@@ -40,6 +48,9 @@ class MatchConnection {
   final String? imageUrl;
   final bool myConsented;
   final bool otherConsented;
+  final bool myContactSharingConsented;
+  final bool otherContactSharingConsented;
+  final String? otherPhoneNumber;
   final bool unread;
   final DateTime createdAt;
 }

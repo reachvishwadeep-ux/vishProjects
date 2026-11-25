@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import (
     AuthPrincipal,
+    accept_contact_sharing,
     create_otp_challenge,
     normalize_phone_number,
     refresh_session,
@@ -50,6 +51,7 @@ def verify_otp_code(
         challenge_id=payload.challenge_id,
         phone_number=normalize_phone_number(payload.phone_number),
         code=payload.code,
+        contact_sharing_consent=payload.contact_sharing_consent,
     )
 
 
@@ -74,4 +76,13 @@ def me(principal: AuthPrincipal = Depends(require_principal)) -> AccountOut:
     return AccountOut(
         id=principal.account.id,
         phone_number=principal.account.phone_number,
+        contact_sharing_consented=(principal.account.contact_sharing_consented_at is not None),
     )
+
+
+@router.post("/contact-sharing-consent", response_model=AccountOut)
+def contact_sharing_consent(
+    principal: AuthPrincipal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> AccountOut:
+    return accept_contact_sharing(db, principal)

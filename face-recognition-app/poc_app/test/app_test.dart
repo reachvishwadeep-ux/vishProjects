@@ -166,6 +166,9 @@ void main() {
                 'image_url': null,
                 'my_consented': false,
                 'other_consented': false,
+                'my_contact_sharing_consented': true,
+                'other_contact_sharing_consented': true,
+                'other_phone_number': '+919000000003',
                 'my_verified_peer': false,
                 'other_verified_peer': false,
                 'unread': true,
@@ -184,6 +187,9 @@ void main() {
                 'image_url': null,
                 'my_consented': false,
                 'other_consented': false,
+                'my_contact_sharing_consented': true,
+                'other_contact_sharing_consented': true,
+                'other_phone_number': '+919000000002',
                 'my_verified_peer': false,
                 'other_verified_peer': false,
                 'unread': true,
@@ -229,18 +235,18 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Request secure connection'),
+      find.text('View matched contact'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Request secure connection'));
+    await tester.tap(find.text('View matched contact'));
     await tester.pumpAndSettle();
 
     expect(requests, ['GET /v1/connections']);
     expect(find.text('Secure connection'), findsOneWidget);
     expect(find.text('Possible found-person case'), findsOneWidget);
     expect(find.text('Unrelated case'), findsNothing);
-    expect(find.text('Consent to connect'), findsOneWidget);
+    expect(find.text('+919000000002'), findsOneWidget);
     expect(
       find.text('Secure contact requests are not enabled yet.'),
       findsNothing,

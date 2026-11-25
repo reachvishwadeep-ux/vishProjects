@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import jwt
@@ -11,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app import auth
 from app.db import get_db
-from app.models import Account, AuditEvent, AuthSession, OtpChallenge
+from app.models import Account, AuditEvent, AuthSession, MatchConnection, OtpChallenge
 from app.otp_delivery import OtpDeliveryError
 from app.routers import auth as auth_router
 
@@ -52,6 +53,7 @@ def client(monkeypatch, settings: SimpleNamespace) -> TestClient:
         OtpChallenge.__table__,
         AuthSession.__table__,
         AuditEvent.__table__,
+        MatchConnection.__table__,
     ):
         table.create(engine)
     session = Session(engine, expire_on_commit=False)
@@ -87,6 +89,7 @@ def test_otp_login_refresh_and_logout(client: TestClient) -> None:
             "challenge_id": challenge["challenge_id"],
             "phone_number": "+919876543210",
             "code": challenge["development_code"],
+            "contact_sharing_consent": True,
         },
     )
     assert verified.status_code == 200
@@ -98,6 +101,7 @@ def test_otp_login_refresh_and_logout(client: TestClient) -> None:
         issuer="matchsnap-test",
     )
     assert claims["sub"] == tokens["account"]["id"]
+    assert tokens["account"]["contact_sharing_consented"] is True
 
     me = client.get(
         "/v1/auth/me",
@@ -105,6 +109,7 @@ def test_otp_login_refresh_and_logout(client: TestClient) -> None:
     )
     assert me.status_code == 200
     assert me.json()["phone_number"] == "+919876543210"
+    assert me.json()["contact_sharing_consented"] is True
 
     refreshed = client.post(
         "/v1/auth/refresh",
@@ -132,6 +137,84 @@ def test_otp_login_refresh_and_logout(client: TestClient) -> None:
         ).status_code
         == 401
     )
+
+
+def test_existing_account_can_accept_contact_sharing_after_login(
+    client: TestClient,
+) -> None:
+    requested = client.post(
+        "/v1/auth/otp/request",
+        json={"phone_number": "+919876543210"},
+    ).json()
+    verified = client.post(
+        "/v1/auth/otp/verify",
+        json={
+            "challenge_id": requested["challenge_id"],
+            "phone_number": "+919876543210",
+            "code": requested["development_code"],
+        },
+    )
+    tokens = verified.json()
+    assert tokens["account"]["contact_sharing_consented"] is False
+
+    consented = client.post(
+        "/v1/auth/contact-sharing-consent",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert consented.status_code == 200
+    assert consented.json()["contact_sharing_consented"] is True
+    session = client.app.dependency_overrides[get_db]()
+    events = session.query(AuditEvent).filter_by(event_type="contact_sharing_consented").all()
+    assert len(events) == 1
+
+
+def test_contact_sharing_consent_activates_existing_eligible_connections() -> None:
+    account = Account(
+        id=uuid.uuid4(),
+        phone_number="+919000000001",
+        is_active=True,
+    )
+    other_account = Account(
+        id=uuid.uuid4(),
+        phone_number="+919000000002",
+        is_active=True,
+        contact_sharing_consented_at=datetime.now(UTC),
+    )
+    connection = MatchConnection(
+        id=uuid.uuid4(),
+        case_match_id=uuid.uuid4(),
+        missing_account_id=account.id,
+        found_account_id=other_account.id,
+        status="pending_contact_consent",
+    )
+
+    class ConsentDb:
+        def __init__(self) -> None:
+            self.events: list[AuditEvent] = []
+
+        def scalars(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(all=lambda: [connection])
+
+        def get(self, model: type[object], object_id: uuid.UUID) -> object | None:
+            if model is Account and object_id == other_account.id:
+                return other_account
+            return None
+
+        def add(self, value: AuditEvent) -> None:
+            self.events.append(value)
+
+    db = ConsentDb()
+
+    auth._record_contact_sharing_consent(
+        db,
+        account,
+        datetime.now(UTC),
+    )
+
+    assert account.contact_sharing_consented_at is not None
+    assert connection.status == "connected"
+    assert db.events[0].event_type == "contact_sharing_consented"
 
 
 def test_otp_is_single_use_and_resend_is_throttled(client: TestClient) -> None:

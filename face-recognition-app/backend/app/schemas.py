@@ -126,6 +126,9 @@ class ConnectionOut(BaseModel):
     image_url: str | None = None
     my_consented: bool
     other_consented: bool
+    my_contact_sharing_consented: bool = False
+    other_contact_sharing_consented: bool = False
+    other_phone_number: str | None = None
     my_verified_peer: bool
     other_verified_peer: bool
     unread: bool
@@ -182,6 +185,7 @@ class OtpVerifyRequest(BaseModel):
     challenge_id: uuid.UUID
     phone_number: str
     code: str
+    contact_sharing_consent: bool = False
 
 
 class RefreshRequest(BaseModel):
@@ -191,6 +195,7 @@ class RefreshRequest(BaseModel):
 class AccountOut(BaseModel):
     id: uuid.UUID
     phone_number: str
+    contact_sharing_consented: bool = False
 
 
 class TokenResponse(BaseModel):

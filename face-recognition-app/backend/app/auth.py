@@ -9,13 +9,13 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.audit_service import record_event, record_risk_alert
 from app.config import get_settings
 from app.db import get_db
-from app.models import Account, AuthSession, OtpChallenge
+from app.models import Account, AuthSession, MatchConnection, OtpChallenge
 from app.otp_delivery import (
     OtpDeliveryError,
     check_telnyx_verification,
@@ -163,6 +163,7 @@ def verify_otp(
     challenge_id: uuid.UUID,
     phone_number: str,
     code: str,
+    contact_sharing_consent: bool = False,
 ) -> TokenResponse:
     settings = get_settings()
     challenge = db.get(OtpChallenge, challenge_id)
@@ -244,6 +245,8 @@ def verify_otp(
             detail="account is disabled",
         )
     account.last_login_at = now
+    if contact_sharing_consent:
+        _record_contact_sharing_consent(db, account, now)
     auth_session, refresh_token = _new_session(db, account, now)
     _audit(db, "otp_verified", account=account)
     db.commit()
@@ -284,6 +287,15 @@ def revoke_session(db: Session, principal: AuthPrincipal) -> None:
     principal.session.revoked_at = datetime.now(UTC)
     _audit(db, "session_revoked", account=principal.account)
     db.commit()
+
+
+def accept_contact_sharing(
+    db: Session,
+    principal: AuthPrincipal,
+) -> AccountOut:
+    _record_contact_sharing_consent(db, principal.account, datetime.now(UTC))
+    db.commit()
+    return _account_out(principal.account)
 
 
 def require_principal(
@@ -359,7 +371,42 @@ def _token_response(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.access_token_ttl_seconds,
-        account=AccountOut(id=account.id, phone_number=account.phone_number),
+        account=_account_out(account),
+    )
+
+
+def _record_contact_sharing_consent(
+    db: Session,
+    account: Account,
+    now: datetime,
+) -> None:
+    if account.contact_sharing_consented_at is None:
+        account.contact_sharing_consented_at = now
+        _audit(db, "contact_sharing_consented", account=account)
+    connections = db.scalars(
+        select(MatchConnection).where(
+            or_(
+                MatchConnection.missing_account_id == account.id,
+                MatchConnection.found_account_id == account.id,
+            )
+        )
+    ).all()
+    for connection in connections:
+        other_account_id = (
+            connection.found_account_id
+            if connection.missing_account_id == account.id
+            else connection.missing_account_id
+        )
+        other_account = db.get(Account, other_account_id)
+        if other_account is not None and other_account.contact_sharing_consented_at is not None:
+            connection.status = "connected"
+
+
+def _account_out(account: Account) -> AccountOut:
+    return AccountOut(
+        id=account.id,
+        phone_number=account.phone_number,
+        contact_sharing_consented=account.contact_sharing_consented_at is not None,
     )
 
 

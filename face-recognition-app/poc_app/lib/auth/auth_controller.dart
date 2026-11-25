@@ -15,6 +15,8 @@ class AuthController extends ChangeNotifier {
   bool get initialized => _initialized;
   bool get busy => _busy;
   bool get authenticated => _account != null;
+  bool get contactSharingConsented =>
+      _account?.contactSharingConsented ?? false;
   AccountSession? get account => _account;
   String? get error => _error;
 
@@ -65,6 +67,16 @@ class AuthController extends ChangeNotifier {
     _account = null;
     _busy = false;
     notifyListeners();
+  }
+
+  Future<bool> acceptContactSharing() async {
+    final account = await _run(repository.acceptContactSharing);
+    if (account == null) {
+      return false;
+    }
+    _account = account;
+    notifyListeners();
+    return true;
   }
 
   Future<T?> _run<T>(Future<T> Function() action) async {

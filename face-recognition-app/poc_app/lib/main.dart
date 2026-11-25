@@ -16,6 +16,7 @@ import 'notifications/push_notification_controller.dart';
 import 'repository/case_repository.dart';
 import 'repository/gallery_repository.dart';
 import 'screens/phone_auth_screen.dart';
+import 'screens/contact_sharing_consent_screen.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
 
@@ -174,6 +175,11 @@ class _PocAppState extends State<PocApp> {
                 }
                 if (!widget.auth!.authenticated) {
                   return PhoneAuthScreen(controller: widget.auth!);
+                }
+                if (!widget.auth!.contactSharingConsented) {
+                  return ContactSharingConsentScreen(
+                    controller: widget.auth!,
+                  );
                 }
                 return AppShell(
                   state: widget.state,

@@ -361,6 +361,41 @@ def test_mutual_consent_connects_without_meeting_codes(
     assert connection.meeting_code_expires_at is None
 
 
+def test_phone_number_is_exposed_only_after_both_accounts_accept_sharing(
+    connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
+) -> None:
+    db, missing_account, found_account, connection = connection_fixture
+
+    private = connection_service._connection_out(
+        db,
+        connection,
+        missing_account.id,
+    )
+    assert private.other_phone_number is None
+    assert private.my_contact_sharing_consented is False
+    assert private.other_contact_sharing_consented is False
+
+    missing_account.contact_sharing_consented_at = datetime.now(UTC)
+    one_sided = connection_service._connection_out(
+        db,
+        connection,
+        missing_account.id,
+    )
+    assert one_sided.other_phone_number is None
+    assert one_sided.my_contact_sharing_consented is True
+    assert one_sided.other_contact_sharing_consented is False
+
+    found_account.contact_sharing_consented_at = datetime.now(UTC)
+    shared = connection_service._connection_out(
+        db,
+        connection,
+        missing_account.id,
+    )
+    assert shared.other_phone_number == found_account.phone_number
+    assert shared.my_contact_sharing_consented is True
+    assert shared.other_contact_sharing_consented is True
+
+
 def test_meeting_code_renewal_is_disabled(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:

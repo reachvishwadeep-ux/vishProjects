@@ -72,6 +72,14 @@ def ensure_connection_for_match(
             },
         )
         return []
+    missing_account = db.get(Account, missing_owner.account_id)
+    found_account = db.get(Account, found_owner.account_id)
+    contact_sharing_ready = (
+        missing_account is not None
+        and missing_account.contact_sharing_consented_at is not None
+        and found_account is not None
+        and found_account.contact_sharing_consented_at is not None
+    )
 
     connection_id = db.scalar(
         insert(MatchConnection)
@@ -79,7 +87,7 @@ def ensure_connection_for_match(
             case_match_id=match.id,
             missing_account_id=missing_owner.account_id,
             found_account_id=found_owner.account_id,
-            status="pending_consent",
+            status=("connected" if contact_sharing_ready else "pending_contact_consent"),
         )
         .on_conflict_do_nothing(index_elements=[MatchConnection.case_match_id])
         .returning(MatchConnection.id)
@@ -498,6 +506,15 @@ def _connection_out(
         if is_missing
         else connection.missing_consented_at is not None
     )
+    my_account = db.get(Account, account_id)
+    other_account_id = connection.found_account_id if is_missing else connection.missing_account_id
+    other_account = db.get(Account, other_account_id)
+    my_contact_sharing_consented = (
+        my_account is not None and my_account.contact_sharing_consented_at is not None
+    )
+    other_contact_sharing_consented = (
+        other_account is not None and other_account.contact_sharing_consented_at is not None
+    )
     my_verified_peer = (
         connection.missing_verified_peer_at is not None
         if is_missing
@@ -519,6 +536,15 @@ def _connection_out(
         image_url=get_store().presigned_url(other_face.image_key),
         my_consented=my_consented,
         other_consented=other_consented,
+        my_contact_sharing_consented=my_contact_sharing_consented,
+        other_contact_sharing_consented=other_contact_sharing_consented,
+        other_phone_number=(
+            other_account.phone_number
+            if my_contact_sharing_consented
+            and other_contact_sharing_consented
+            and other_account is not None
+            else None
+        ),
         my_verified_peer=my_verified_peer,
         other_verified_peer=other_verified_peer,
         unread=notification is not None and notification.read_at is None,

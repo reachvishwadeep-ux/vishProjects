@@ -13,6 +13,9 @@ Map<String, Object?> _connection({
   bool otherConsented = false,
   bool unread = true,
   String status = 'pending_consent',
+  bool myContactSharingConsented = true,
+  bool otherContactSharingConsented = false,
+  String? otherPhoneNumber,
 }) {
   return {
     'id': '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
@@ -25,6 +28,9 @@ Map<String, Object?> _connection({
     'image_url': null,
     'my_consented': myConsented,
     'other_consented': otherConsented,
+    'my_contact_sharing_consented': myContactSharingConsented,
+    'other_contact_sharing_consented': otherContactSharingConsented,
+    'other_phone_number': otherPhoneNumber,
     'unread': unread,
     'created_at': '2026-10-01T12:00:00Z',
   };
@@ -133,7 +139,7 @@ void main() {
     expect(consented.status, 'connected');
   });
 
-  testWidgets('match screen renders consent and privacy safeguards',
+  testWidgets('match screen renders contact-sharing safeguards',
       (tester) async {
     final repository = _repository(
       MockClient((request) async {
@@ -157,10 +163,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Possible found-person case'), findsOneWidget);
-    expect(find.text('Consent to connect'), findsOneWidget);
+    expect(
+      find.textContaining('The other party has not accepted'),
+      findsOneWidget,
+    );
     expect(find.text('Private by design'), findsOneWidget);
     expect(
-      find.textContaining('mutual consent do not prove identity'),
+      find.textContaining('phone sharing do not prove identity'),
       findsOneWidget,
     );
   });
@@ -202,7 +211,8 @@ void main() {
         find.textContaining('Similarity is review evidence'), findsOneWidget);
   });
 
-  testWidgets('mutual consent shows a private connected state', (tester) async {
+  testWidgets('accepted sharing shows the matched phone number',
+      (tester) async {
     final repository = _repository(
       MockClient((request) async {
         if (request.url.path == '/v1/connections/matches') {
@@ -216,6 +226,9 @@ void main() {
                 otherConsented: true,
                 status: 'connected',
                 unread: false,
+                myContactSharingConsented: true,
+                otherContactSharingConsented: true,
+                otherPhoneNumber: '+919000000002',
               ),
             ],
           }),
@@ -232,10 +245,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Both parties consented'),
+      find.text('+919000000002'),
       findsOneWidget,
     );
-    expect(find.textContaining('Phone numbers remain private'), findsOneWidget);
+    expect(find.text('MATCHED CONTACT'), findsOneWidget);
     expect(find.text('CONNECTED'), findsOneWidget);
     expect(find.textContaining('meeting code'), findsNothing);
   });

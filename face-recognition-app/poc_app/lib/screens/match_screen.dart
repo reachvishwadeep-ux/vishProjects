@@ -392,7 +392,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 child: _BenefitCard(
                   icon: Icons.shield_outlined,
                   title: 'Controlled',
-                  description: 'No automatic contact sharing',
+                  description: 'Contact shared only after disclosure',
                 ),
               ),
               SizedBox(width: 10),

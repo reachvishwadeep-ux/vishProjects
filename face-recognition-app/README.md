@@ -102,9 +102,11 @@ duplicated. Configure it with `RECONCILIATION_ENABLED`,
 `RECONCILIATION_TOP_K`.
 
 When a high-scoring missing/found pair belongs to two different accounts, the API
-creates a private in-app connection notification. Both accounts must consent before
-the connection becomes active. Phone numbers and precise locations are not included
-in connection responses. Messaging and contact sharing are not currently enabled.
+creates a private in-app connection notification. The mobile sign-in flow requires a
+clear phone-sharing disclosure. After both matched accounts accept it, each
+authenticated participant receives the other participant's verified phone number in
+the connection response. Precise locations are never included, and push alerts never
+contain phone numbers.
 
 Bulk-ingest an existing repository (`repository/<person_name>/*.jpg`):
 
@@ -121,14 +123,15 @@ docker compose exec api python -m scripts.ingest /data/repository
 | `POST /v1/auth/refresh` | Rotate the refresh token and issue a new access token. |
 | `POST /v1/auth/logout` | Revoke the current authenticated session. |
 | `GET /v1/auth/me` | Return the authenticated phone account. |
+| `POST /v1/auth/contact-sharing-consent` | Record the authenticated account's phone-sharing consent and activate eligible existing connections. |
 | `POST /v1/enroll` | Add a photo. Fields: `image`, `person_name`, `consent_ref?`, `force?`. Rejects low-quality photos unless `force=true`. |
 | `POST /v1/search` | 1:N identification. Returns ranked matches with cosine scores and a `decision` of `match` / `review` / `no_match`. |
 | `POST /v1/cases` | Store a `missing` or `found` case and search only the opposite repository. |
 | `GET /v1/cases/{id}/matches` | Retrieve persisted possible matches for an owned case. |
 | `DELETE /v1/cases/{id}` | Delete an owned case, its embedding, stored photo, and candidate links. |
-| `GET /v1/connections` | List the authenticated account's private match notifications and consent state. |
-| `POST /v1/connections/{id}/consent` | Consent to the private connection; it becomes active after mutual consent. |
-| `POST /v1/connections/{id}/withdraw-consent` | Withdraw consent and return the connection to pending state. |
+| `GET /v1/connections` | List private match notifications and include the matched participant's phone number only after both accounts accept sharing. |
+| `POST /v1/connections/{id}/consent` | Legacy per-connection consent endpoint retained for older app versions. |
+| `POST /v1/connections/{id}/withdraw-consent` | Legacy per-connection withdrawal endpoint retained for older app versions. |
 | `POST /v1/connections/{id}/meeting-code/verify` | Deprecated; returns HTTP 410 because meeting-code verification is disabled. |
 | `POST /v1/connections/{id}/meeting-code/renew` | Deprecated; returns HTTP 410 because meeting-code verification is disabled. |
 | `POST /v1/audit/installations/register` | Register a random app-installation instance on first launch. This is not proof of an App Store or Play Store installation. |
@@ -224,7 +227,7 @@ a human instead of being asserted as matches.
   `OTP_DELIVERY_MODE=telnyx_verify`, and Twilio remains an optional fallback with
   `OTP_DELIVERY_MODE=twilio_verify`. HTTPS, upload rate limits, and stricter role/case
   authorization are still required before production.
-- Face similarity and mutual consent do not prove identity, guardianship, custody,
+- Face similarity and phone sharing do not prove identity, guardianship, custody,
   intent, or a safe child handoff. They must never automatically authorize a child
   transfer.
 

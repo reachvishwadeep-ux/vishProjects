@@ -33,6 +33,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   final _codeController = TextEditingController();
   OtpChallenge? _challenge;
   String? _requestedPhoneNumber;
+  var _contactSharingAccepted = false;
 
   @override
   void dispose() {
@@ -162,8 +163,41 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  CheckboxListTile(
+                    value: _contactSharingAccepted,
+                    onChanged: widget.controller.busy
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _contactSharingAccepted = value ?? false;
+                            });
+                          },
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text(
+                      'I agree to phone-number sharing after a match',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'If a cross-account photo match is found, my verified '
+                      'phone number will be shown to the matched seeker or '
+                      'finder, and their number will be shown to me.',
+                      style: TextStyle(
+                        color: brandMuted,
+                        fontSize: 11,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   FilledButton(
-                    onPressed: widget.controller.busy ? null : _requestOtp,
+                    onPressed:
+                        widget.controller.busy || !_contactSharingAccepted
+                            ? null
+                            : _requestOtp,
                     child: const Text('Send verification code'),
                   ),
                 ] else ...[
@@ -247,7 +281,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Your phone number is used for account access. It is not shown to other users.',
+                        'Your phone number is used for account access and is '
+                        'shared only with the matched seeker or finder after '
+                        'both accounts accept this disclosure.',
                         style: TextStyle(
                           color: brandMuted,
                           fontSize: 12,

@@ -147,8 +147,8 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                 const _SectionHeading(
                   title: 'Secure connections',
                   message:
-                      'Cross-account matches with mutual consent and private '
-                      'contact details.',
+                      'Cross-account photo matches with verified phone contact '
+                      'for the matched seeker and finder.',
                 ),
                 const SizedBox(height: 12),
                 ..._connections.map(
@@ -315,8 +315,9 @@ class _PrivacyBanner extends StatelessWidget {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Phone numbers and precise locations stay private. '
-                  'Both parties must consent before a connection is active.',
+                  'Your verified phone number is shared only with a matched '
+                  'seeker or finder after both accounts accept the disclosure. '
+                  'Precise locations stay private.',
                   style: TextStyle(
                     color: Color(0xE6FFFFFF),
                     fontSize: 12,
@@ -570,52 +571,23 @@ class _ConnectionCardState extends State<_ConnectionCard> {
               ],
             ),
             const SizedBox(height: 14),
-            _ConsentProgress(connection: connection),
+            _ContactSharingProgress(connection: connection),
             const SizedBox(height: 14),
-            if (!connection.myConsented)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () => _act(
-                            () => widget.repository.consent(connection.id),
-                            'Your consent to connect was recorded.',
-                          ),
-                  icon: const Icon(Icons.handshake_outlined, size: 19),
-                  label: const Text('Consent to connect'),
-                ),
-              )
-            else if (!connection.otherConsented)
+            if (connection.otherPhoneNumber != null)
+              _PhoneContactCard(phoneNumber: connection.otherPhoneNumber!)
+            else if (!connection.otherContactSharingConsented)
               const _InlineNotice(
                 icon: Icons.hourglass_top_rounded,
-                text: 'Waiting for the other party to consent.',
+                text: 'The other party has not accepted phone-number sharing '
+                    'yet. Their number will appear here after they update the '
+                    'app and agree.',
               )
             else
               const _InlineNotice(
-                icon: Icons.handshake_rounded,
-                text: 'Both parties consented. Phone numbers remain private; '
-                    'messaging and contact sharing are not enabled yet.',
-                success: true,
+                icon: Icons.sync_problem_rounded,
+                text: 'Phone contact is temporarily unavailable. Refresh this '
+                    'match or try again later.',
               ),
-            if (connection.myConsented) ...[
-              const SizedBox(height: 5),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () => _act(
-                            () => widget.repository.withdrawConsent(
-                              connection.id,
-                            ),
-                            'Your consent was withdrawn.',
-                          ),
-                  icon: const Icon(Icons.block_rounded, size: 16),
-                  label: const Text('Withdraw consent'),
-                ),
-              ),
-            ],
             if (connection.unread) ...[
               const SizedBox(height: 9),
               Align(
@@ -644,7 +616,7 @@ class _ConnectionCardState extends State<_ConnectionCard> {
             ],
             const SizedBox(height: 12),
             const Text(
-              'Face similarity and mutual consent do not prove identity, '
+              'Face similarity and phone sharing do not prove identity, '
               'guardianship, custody, or a safe child handoff. Never transfer '
               'a child based on the app alone.',
               style: TextStyle(
@@ -660,8 +632,73 @@ class _ConnectionCardState extends State<_ConnectionCard> {
   }
 }
 
-class _ConsentProgress extends StatelessWidget {
-  const _ConsentProgress({required this.connection});
+class _PhoneContactCard extends StatelessWidget {
+  const _PhoneContactCard({required this.phoneNumber});
+
+  final String phoneNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: brandGreen.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: brandGreen.withValues(alpha: .24)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 20,
+            backgroundColor: brandGreen,
+            child: Icon(
+              Icons.phone_in_talk_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'MATCHED CONTACT',
+                  style: TextStyle(
+                    color: brandGreen,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SelectableText(
+                  phoneNumber,
+                  style: const TextStyle(
+                    color: brandInk,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Call or message using your phone.',
+                  style: TextStyle(
+                    color: brandMuted,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactSharingProgress extends StatelessWidget {
+  const _ContactSharingProgress({required this.connection});
 
   final MatchConnection connection;
 
@@ -672,16 +709,20 @@ class _ConsentProgress extends StatelessWidget {
         Expanded(
           child: _ProgressItem(
             label: 'YOU',
-            complete: connection.myConsented,
-            text: connection.myConsented ? 'Consented' : 'Consent needed',
+            complete: connection.myContactSharingConsented,
+            text: connection.myContactSharingConsented
+                ? 'Sharing accepted'
+                : 'Consent needed',
           ),
         ),
         Container(width: 18, height: 2, color: brandBorder),
         Expanded(
           child: _ProgressItem(
             label: 'OTHER PARTY',
-            complete: connection.otherConsented,
-            text: connection.otherConsented ? 'Consented' : 'Waiting',
+            complete: connection.otherContactSharingConsented,
+            text: connection.otherContactSharingConsented
+                ? 'Sharing accepted'
+                : 'Waiting',
           ),
         ),
       ],
@@ -745,16 +786,14 @@ class _InlineNotice extends StatelessWidget {
   const _InlineNotice({
     required this.icon,
     required this.text,
-    this.success = false,
   });
 
   final IconData icon;
   final String text;
-  final bool success;
 
   @override
   Widget build(BuildContext context) {
-    final color = success ? brandGreen : brandPurple;
+    const color = brandPurple;
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(

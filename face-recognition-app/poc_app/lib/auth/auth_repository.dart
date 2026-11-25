@@ -17,10 +17,15 @@ class OtpChallenge {
 }
 
 class AccountSession {
-  const AccountSession({required this.accountId, required this.phoneNumber});
+  const AccountSession({
+    required this.accountId,
+    required this.phoneNumber,
+    required this.contactSharingConsented,
+  });
 
   final String accountId;
   final String phoneNumber;
+  final bool contactSharingConsented;
 }
 
 abstract class TokenStore {
@@ -96,6 +101,7 @@ class AuthRepository {
         'phone_number': phoneNumber,
         'challenge_id': challengeId,
         'code': code,
+        'contact_sharing_consent': true,
       }),
     );
     final payload = _payload(response);
@@ -103,6 +109,30 @@ class AuthRepository {
       throw AuthException(_errorMessage(payload));
     }
     return _saveSession(payload);
+  }
+
+  Future<AccountSession> acceptContactSharing() async {
+    final token = await validAccessToken();
+    if (token == null) {
+      throw const SessionExpiredException(
+        'Your session expired. Sign in again to continue.',
+      );
+    }
+    final response = await _post(
+      Uri.parse('$baseUrl/v1/auth/contact-sharing-consent'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    final payload = _payload(response);
+    if (response.statusCode != 200) {
+      if (response.statusCode == 401) {
+        throw SessionExpiredException(_errorMessage(payload));
+      }
+      throw AuthException(_errorMessage(payload));
+    }
+    final account = _accountFromPayload(payload);
+    _account = account;
+    await _tokenStore.write(_phoneNumberKey, account.phoneNumber);
+    return account;
   }
 
   Future<AccountSession?> restore() async {
@@ -176,10 +206,7 @@ class AuthRepository {
 
   Future<AccountSession> _saveSession(Map<String, Object?> payload) async {
     final accountPayload = payload['account']! as Map<String, Object?>;
-    final account = AccountSession(
-      accountId: accountPayload['id']! as String,
-      phoneNumber: accountPayload['phone_number']! as String,
-    );
+    final account = _accountFromPayload(accountPayload);
     _accessToken = payload['access_token']! as String;
     _accessTokenExpiresAt = DateTime.now().toUtc().add(
           Duration(seconds: payload['expires_in']! as int),
@@ -191,6 +218,15 @@ class AuthRepository {
     );
     await _tokenStore.write(_phoneNumberKey, account.phoneNumber);
     return account;
+  }
+
+  AccountSession _accountFromPayload(Map<String, Object?> payload) {
+    return AccountSession(
+      accountId: payload['id']! as String,
+      phoneNumber: payload['phone_number']! as String,
+      contactSharingConsented:
+          payload['contact_sharing_consented'] as bool? ?? false,
+    );
   }
 
   Map<String, Object?> _payload(http.Response response) {

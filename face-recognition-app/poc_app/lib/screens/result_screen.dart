@@ -33,14 +33,15 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
-  void _openSecureConnection() {
+  void _openMatchedContact() {
     final connectionId = widget.outcome.best?.connectionId;
     final repository = widget.connections;
     if (connectionId == null || repository == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'A private connection opens once this match is confirmed. '
+            'Matched contact details appear once both accounts accept '
+            'phone-number sharing. '
             'Check My Matches for updates.',
           ),
         ),
@@ -77,7 +78,7 @@ class _ResultScreenState extends State<ResultScreen> {
             : _MatchFoundResult(
                 probe: widget.probe,
                 outcome: widget.outcome,
-                onChat: _openSecureConnection,
+                onChat: _openMatchedContact,
               ),
       ),
     );
@@ -297,8 +298,9 @@ class _MatchFoundResult extends StatelessWidget {
                 ),
                 const Divider(height: 26),
                 const Text(
-                  'Contact details stay private. Both people must consent '
-                  'before the connection becomes active.',
+                  'Verified phone numbers are shared between the matched '
+                  'seeker and finder after both accounts accept the '
+                  'phone-sharing disclosure.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: brandMuted,
@@ -325,8 +327,8 @@ class _MatchFoundResult extends StatelessWidget {
           ),
           child: FilledButton.icon(
             onPressed: onChat,
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            label: const Text('Request secure connection'),
+            icon: const Icon(Icons.phone_in_talk_outlined),
+            label: const Text('View matched contact'),
             style: FilledButton.styleFrom(
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,

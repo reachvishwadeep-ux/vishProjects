@@ -14,6 +14,12 @@ def ensure_runtime_schema() -> None:
         return
     with engine.begin() as connection:
         connection.execute(
+            text(
+                "ALTER TABLE account "
+                "ADD COLUMN IF NOT EXISTS contact_sharing_consented_at timestamptz"
+            )
+        )
+        connection.execute(
             text("ALTER TABLE app_installation " "ADD COLUMN IF NOT EXISTS push_fid varchar(255)")
         )
         connection.execute(
