@@ -11,6 +11,14 @@ def keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
+def requiresReleaseSigning = gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains("release")
+}
+if (requiresReleaseSigning && !keystorePropertiesFile.exists()) {
+    throw new GradleException(
+        "Missing android/key.properties; refusing to build an unsigned release."
+    )
+}
 
 android {
     namespace = "com.vishwadeep.matchesnap"
