@@ -542,6 +542,7 @@ def _connection_out(
             other_account.phone_number
             if my_contact_sharing_consented
             and other_contact_sharing_consented
+            and connection.status == "connected"
             and other_account is not None
             else None
         ),

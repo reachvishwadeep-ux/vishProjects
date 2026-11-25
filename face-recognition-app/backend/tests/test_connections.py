@@ -386,6 +386,7 @@ def test_phone_number_is_exposed_only_after_both_accounts_accept_sharing(
     assert one_sided.other_contact_sharing_consented is False
 
     found_account.contact_sharing_consented_at = datetime.now(UTC)
+    connection.status = "connected"
     shared = connection_service._connection_out(
         db,
         connection,
@@ -968,16 +969,19 @@ def test_withdrawing_consent_disconnects_the_parties(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:
     db, missing_account, found_account, connection = connection_fixture
+    missing_account.contact_sharing_consented_at = datetime.now(UTC)
+    found_account.contact_sharing_consented_at = datetime.now(UTC)
     connection_service.consent_to_connection(
         db,
         connection_id=connection.id,
         account=missing_account,
     )
-    connection_service.consent_to_connection(
+    connected = connection_service.consent_to_connection(
         db,
         connection_id=connection.id,
         account=found_account,
     )
+    assert connected.other_phone_number == missing_account.phone_number
 
     withdrawn = connection_service.withdraw_connection_consent(
         db,
@@ -988,6 +992,7 @@ def test_withdrawing_consent_disconnects_the_parties(
     assert withdrawn.status == "pending_consent"
     assert withdrawn.my_consented is False
     assert withdrawn.other_consented is True
+    assert withdrawn.other_phone_number is None
     assert withdrawn.meeting_code is None
     assert connection.meeting_nonce is None
     assert db.audit_events[-1].event_type == "connection_consent_withdrawn"
