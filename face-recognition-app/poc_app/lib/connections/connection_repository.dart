@@ -17,17 +17,22 @@ class MatchConnection {
     required this.unread,
     required this.createdAt,
     this.imageUrl,
+    this.myImageUrl,
+    this.otherImageUrl,
     this.otherPhoneNumber,
   });
 
   factory MatchConnection.fromJson(Map<String, Object?> json) {
+    final legacyImageUrl = json['image_url'] as String?;
     return MatchConnection(
       id: json['id']! as String,
       role: json['role']! as String,
       status: json['status']! as String,
       otherSubjectLabel: json['other_subject_label']! as String,
       score: (json['score']! as num).toDouble(),
-      imageUrl: json['image_url'] as String?,
+      imageUrl: legacyImageUrl,
+      myImageUrl: json['my_image_url'] as String?,
+      otherImageUrl: json['other_image_url'] as String? ?? legacyImageUrl,
       myConsented: json['my_consented']! as bool,
       otherConsented: json['other_consented']! as bool,
       myContactSharingConsented:
@@ -46,6 +51,8 @@ class MatchConnection {
   final String otherSubjectLabel;
   final double score;
   final String? imageUrl;
+  final String? myImageUrl;
+  final String? otherImageUrl;
   final bool myConsented;
   final bool otherConsented;
   final bool myContactSharingConsented;

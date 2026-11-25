@@ -124,6 +124,8 @@ class ConnectionOut(BaseModel):
     other_subject_label: str
     score: float
     image_url: str | None = None
+    my_image_url: str | None = None
+    other_image_url: str | None = None
     my_consented: bool
     other_consented: bool
     my_contact_sharing_consented: bool = False

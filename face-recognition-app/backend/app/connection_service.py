@@ -481,10 +481,12 @@ def _connection_out(
     is_missing = account_id == connection.missing_account_id
     my_case_id = match.missing_case_id if is_missing else match.found_case_id
     other_case_id = match.found_case_id if is_missing else match.missing_case_id
+    my_face_id = match.missing_face_id if is_missing else match.found_face_id
     other_face_id = match.found_face_id if is_missing else match.missing_face_id
     other_case = db.get(CaseRecord, other_case_id)
+    my_face = db.get(CaseFace, my_face_id)
     other_face = db.get(CaseFace, other_face_id)
-    if other_case is None or other_face is None:
+    if other_case is None or my_face is None or other_face is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="matched case is unavailable",
@@ -534,6 +536,8 @@ def _connection_out(
         other_subject_label=other_case.subject_label,
         score=match.score,
         image_url=get_store().presigned_url(other_face.image_key),
+        my_image_url=get_store().presigned_url(my_face.image_key),
+        other_image_url=get_store().presigned_url(other_face.image_key),
         my_consented=my_consented,
         other_consented=other_consented,
         my_contact_sharing_consented=my_contact_sharing_consented,

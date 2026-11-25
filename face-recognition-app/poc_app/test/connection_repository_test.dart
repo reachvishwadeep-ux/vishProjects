@@ -9,6 +9,7 @@ import 'package:poc_app/screens/my_matches_screen.dart';
 import 'package:poc_app/theme.dart';
 
 Map<String, Object?> _connection({
+  String role = 'missing',
   bool myConsented = false,
   bool otherConsented = false,
   bool unread = true,
@@ -16,16 +17,20 @@ Map<String, Object?> _connection({
   bool myContactSharingConsented = true,
   bool otherContactSharingConsented = false,
   String? otherPhoneNumber,
+  String? myImageUrl,
+  String? otherImageUrl,
 }) {
   return {
     'id': '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
-    'role': 'missing',
+    'role': role,
     'status': status,
     'my_case_id': 'cb6b985c-b258-47f1-91bc-fd8d2dc9122a',
     'other_case_id': '5c17190c-a719-4639-8bf9-9272f45f19ef',
     'other_subject_label': 'Possible found-person case',
     'score': 0.81,
     'image_url': null,
+    'my_image_url': myImageUrl,
+    'other_image_url': otherImageUrl,
     'my_consented': myConsented,
     'other_consented': otherConsented,
     'my_contact_sharing_consented': myContactSharingConsented,
@@ -88,6 +93,35 @@ void main() {
     expect(connections.single.otherSubjectLabel, 'Possible found-person case');
     expect(connections.single.score, 0.81);
     expect(connections.single.unread, isTrue);
+  });
+
+  test('parses both participant-specific matched photo URLs', () async {
+    final repository = _repository(
+      MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'results': [
+              _connection(
+                myImageUrl: 'https://images.example.com/missing.jpg',
+                otherImageUrl: 'https://images.example.com/found.jpg',
+              ),
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    final connection = (await repository.list()).single;
+
+    expect(
+      connection.myImageUrl,
+      'https://images.example.com/missing.jpg',
+    );
+    expect(
+      connection.otherImageUrl,
+      'https://images.example.com/found.jpg',
+    );
   });
 
   test('lists authenticated current and previous match history', () async {
@@ -163,6 +197,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Possible found-person case'), findsOneWidget);
+    expect(find.text('YOUR PHOTO'), findsOneWidget);
+    expect(find.text('FOUND PHOTO'), findsOneWidget);
     expect(
       find.textContaining('The other party has not accepted'),
       findsOneWidget,
@@ -172,6 +208,33 @@ void main() {
       find.textContaining('phone sharing do not prove identity'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('finder sees their photo beside the matched missing photo',
+      (tester) async {
+    final repository = _repository(
+      MockClient((request) async {
+        if (request.url.path == '/v1/connections/matches') {
+          return http.Response(jsonEncode({'results': []}), 200);
+        }
+        return http.Response(
+          jsonEncode({
+            'results': [_connection(role: 'found')],
+          }),
+          200,
+        );
+      }),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: MyMatchesScreen(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('YOUR PHOTO'), findsOneWidget);
+    expect(find.text('MISSING PHOTO'), findsOneWidget);
   });
 
   testWidgets('match screen shows same-account current and previous matches',

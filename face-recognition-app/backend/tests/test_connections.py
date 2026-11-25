@@ -397,6 +397,30 @@ def test_phone_number_is_exposed_only_after_both_accounts_accept_sharing(
     assert shared.other_contact_sharing_consented is True
 
 
+def test_each_participant_receives_both_matched_photos(
+    connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
+) -> None:
+    db, missing_account, found_account, connection = connection_fixture
+
+    missing_view = connection_service._connection_out(
+        db,
+        connection,
+        missing_account.id,
+    )
+    found_view = connection_service._connection_out(
+        db,
+        connection,
+        found_account.id,
+    )
+
+    assert missing_view.my_image_url == "https://images.example.com/missing.jpg"
+    assert missing_view.other_image_url == "https://images.example.com/found.jpg"
+    assert missing_view.image_url == missing_view.other_image_url
+    assert found_view.my_image_url == "https://images.example.com/found.jpg"
+    assert found_view.other_image_url == "https://images.example.com/missing.jpg"
+    assert found_view.image_url == found_view.other_image_url
+
+
 def test_meeting_code_renewal_is_disabled(
     connection_fixture: tuple[FakeDb, Account, Account, MatchConnection],
 ) -> None:
