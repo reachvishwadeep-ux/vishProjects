@@ -12,6 +12,8 @@ Map<String, Object?> _case({
   String caseType = 'missing',
   int matchCount = 0,
   String matchState = 'searching',
+  String? myImageUrl,
+  String? otherImageUrl,
 }) {
   return {
     'id': '7c40725a-3000-43f7-b24d-12d6daea4b5d',
@@ -30,6 +32,8 @@ Map<String, Object?> _case({
         'created_at': '2026-11-22T12:00:00Z',
       },
     ],
+    'my_image_url': myImageUrl,
+    'other_image_url': otherImageUrl,
     'created_at': '2026-11-22T12:00:00Z',
   };
 }
@@ -52,7 +56,12 @@ void main() {
         expect(request.headers['authorization'], 'Bearer access-token');
         return http.Response(
           jsonEncode({
-            'results': [_case()],
+            'results': [
+              _case(
+                myImageUrl: 'https://images.example.com/missing.jpg',
+                otherImageUrl: 'https://images.example.com/found.jpg',
+              ),
+            ],
           }),
           200,
         );
@@ -66,6 +75,14 @@ void main() {
     expect(cases.single.matchState, 'searching');
     expect(cases.single.photos, hasLength(1));
     expect(cases.single.photos.single.quality, 0.92);
+    expect(
+      cases.single.myImageUrl,
+      'https://images.example.com/missing.jpg',
+    );
+    expect(
+      cases.single.otherImageUrl,
+      'https://images.example.com/found.jpg',
+    );
   });
 
   testWidgets('shows searching and matched uploaded cases', (tester) async {
@@ -127,5 +144,72 @@ void main() {
 
     expect(find.text('No uploaded cases yet'), findsOneWidget);
     expect(find.textContaining('They will appear here'), findsOneWidget);
+  });
+
+  testWidgets('missing case shows its matched found-photo pair',
+      (tester) async {
+    final repository = _repository(
+      MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'results': [
+              _case(
+                matchCount: 1,
+                matchState: 'potential_match',
+                myImageUrl: 'https://images.example.com/missing.jpg',
+                otherImageUrl: 'https://images.example.com/found.jpg',
+              ),
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: MyCasesScreen(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MATCHED PAIR'), findsOneWidget);
+    expect(find.text('YOUR PHOTO'), findsOneWidget);
+    expect(find.text('FOUND PHOTO'), findsOneWidget);
+  });
+
+  testWidgets('found case shows its matched missing-photo pair',
+      (tester) async {
+    final repository = _repository(
+      MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'results': [
+              _case(
+                caseType: 'found',
+                matchCount: 1,
+                matchState: 'potential_match',
+                myImageUrl: 'https://images.example.com/found.jpg',
+                otherImageUrl: 'https://images.example.com/missing.jpg',
+              ),
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: MyCasesScreen(repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MATCHED PAIR'), findsOneWidget);
+    expect(find.text('YOUR PHOTO'), findsOneWidget);
+    expect(find.text('MISSING PHOTO'), findsOneWidget);
   });
 }

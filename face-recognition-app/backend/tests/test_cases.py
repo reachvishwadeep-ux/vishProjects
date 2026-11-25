@@ -153,11 +153,23 @@ def test_owned_case_listing_includes_all_photos_and_match_state(
             created_at=created_at - timedelta(days=1),
         )
     ]
+    matched_missing_face = CaseFace(
+        id=uuid.uuid4(),
+        case_id=uuid.uuid4(),
+        case_type="missing",
+        image_key="cases/matched/missing.jpg",
+        bbox=[0, 0, 10, 10],
+        det_score=0.97,
+        quality=0.90,
+        model_tag="test",
+        embedding=[0.0] * 512,
+        created_at=created_at - timedelta(days=2),
+    )
     match = CaseMatch(
         id=uuid.uuid4(),
-        missing_case_id=uuid.uuid4(),
+        missing_case_id=matched_missing_face.case_id,
         found_case_id=matched_case.id,
-        missing_face_id=uuid.uuid4(),
+        missing_face_id=matched_missing_face.id,
         found_face_id=matched_case.faces[0].id,
         score=0.82,
         decision="match",
@@ -174,6 +186,17 @@ def test_owned_case_listing_includes_all_photos_and_match_state(
     class FakeDb:
         def scalars(self, statement: object) -> SimpleNamespace:
             return SimpleNamespace(all=lambda: next(scalar_results))
+
+        def get(
+            self,
+            model: type[CaseFace],
+            record_id: uuid.UUID,
+        ) -> CaseFace | None:
+            assert model is CaseFace
+            return {
+                matched_case.faces[0].id: matched_case.faces[0],
+                matched_missing_face.id: matched_missing_face,
+            }.get(record_id)
 
     class FakeStore:
         def presigned_url(self, key: str) -> str:
@@ -195,6 +218,86 @@ def test_owned_case_listing_includes_all_photos_and_match_state(
     assert matched.match_state == "potential_match"
     assert matched.match_count == 1
     assert matched.case_type == CaseType.found
+    assert matched.my_image_url.endswith("/front.jpg")
+    assert matched.other_image_url.endswith("/missing.jpg")
+
+
+def test_missing_case_listing_returns_role_relative_match_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_at = datetime.now(UTC)
+    missing_case = CaseRecord(
+        id=uuid.uuid4(),
+        case_type="missing",
+        subject_label="Missing person submission",
+        status="active",
+        created_at=created_at,
+    )
+    missing_face = CaseFace(
+        id=uuid.uuid4(),
+        case_id=missing_case.id,
+        case_type="missing",
+        image_key="cases/matched/missing.jpg",
+        bbox=[0, 0, 10, 10],
+        det_score=0.99,
+        quality=0.94,
+        model_tag="test",
+        embedding=[0.0] * 512,
+        created_at=created_at,
+    )
+    missing_case.faces = [missing_face]
+    found_face = CaseFace(
+        id=uuid.uuid4(),
+        case_id=uuid.uuid4(),
+        case_type="found",
+        image_key="cases/matched/found.jpg",
+        bbox=[0, 0, 10, 10],
+        det_score=0.98,
+        quality=0.92,
+        model_tag="test",
+        embedding=[0.0] * 512,
+        created_at=created_at,
+    )
+    match = CaseMatch(
+        id=uuid.uuid4(),
+        missing_case_id=missing_case.id,
+        found_case_id=found_face.case_id,
+        missing_face_id=missing_face.id,
+        found_face_id=found_face.id,
+        score=0.83,
+        decision="match",
+        model_tag="test",
+    )
+    scalar_results = iter([[missing_case], [match]])
+
+    class FakeDb:
+        def scalars(self, statement: object) -> SimpleNamespace:
+            return SimpleNamespace(all=lambda: next(scalar_results))
+
+        def get(
+            self,
+            model: type[CaseFace],
+            record_id: uuid.UUID,
+        ) -> CaseFace | None:
+            assert model is CaseFace
+            return {
+                missing_face.id: missing_face,
+                found_face.id: found_face,
+            }.get(record_id)
+
+    class FakeStore:
+        def presigned_url(self, key: str) -> str:
+            return f"https://images.example.com/{key}"
+
+    monkeypatch.setattr(case_service, "get_store", lambda: FakeStore())
+
+    uploaded_case = case_service.list_owned_cases(
+        FakeDb(),
+        account_id=uuid.uuid4(),
+    ).results[0]
+
+    assert uploaded_case.my_image_url.endswith("/missing.jpg")
+    assert uploaded_case.other_image_url.endswith("/found.jpg")
 
 
 def test_submission_contract_passes_missing_role_to_remote_case_service(

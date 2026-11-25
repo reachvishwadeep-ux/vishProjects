@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../repository/case_repository.dart';
 import '../theme.dart';
+import '../widgets/matched_photo_pair.dart';
 
 class MyCasesScreen extends StatefulWidget {
   const MyCasesScreen({
@@ -266,6 +267,24 @@ class _CaseCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+            if (uploadedCase.hasMatchedPhotoPair) ...[
+              const Text(
+                'MATCHED PAIR',
+                style: TextStyle(
+                  color: brandMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              MatchedPhotoPair(
+                role: uploadedCase.caseType,
+                myImageUrl: uploadedCase.myImageUrl,
+                otherImageUrl: uploadedCase.otherImageUrl,
+              ),
+              const SizedBox(height: 14),
+            ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(

@@ -36,6 +36,8 @@ class UploadedCase {
     required this.matchState,
     required this.photos,
     required this.createdAt,
+    this.myImageUrl,
+    this.otherImageUrl,
   });
 
   factory UploadedCase.fromJson(Map<String, Object?> json) {
@@ -54,6 +56,8 @@ class UploadedCase {
           )
           .toList(),
       createdAt: DateTime.parse(json['created_at']! as String).toLocal(),
+      myImageUrl: json['my_image_url'] as String?,
+      otherImageUrl: json['other_image_url'] as String?,
     );
   }
 
@@ -65,6 +69,10 @@ class UploadedCase {
   final String matchState;
   final List<UploadedCasePhoto> photos;
   final DateTime createdAt;
+  final String? myImageUrl;
+  final String? otherImageUrl;
+
+  bool get hasMatchedPhotoPair => myImageUrl != null && otherImageUrl != null;
 }
 
 class CaseRepository {

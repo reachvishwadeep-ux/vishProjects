@@ -315,6 +315,18 @@ def list_owned_cases(
             .order_by(CaseMatch.score.desc())
         ).all()
         photos = sorted(case.faces, key=lambda face: face.created_at)
+        my_image_url = None
+        other_image_url = None
+        if matches:
+            best_match = matches[0]
+            is_missing = best_match.missing_case_id == case.id
+            my_face_id = best_match.missing_face_id if is_missing else best_match.found_face_id
+            other_face_id = best_match.found_face_id if is_missing else best_match.missing_face_id
+            my_face = db.get(CaseFace, my_face_id)
+            other_face = db.get(CaseFace, other_face_id)
+            if my_face is not None and other_face is not None:
+                my_image_url = store.presigned_url(my_face.image_key)
+                other_image_url = store.presigned_url(other_face.image_key)
         results.append(
             OwnedCaseOut(
                 id=case.id,
@@ -333,6 +345,8 @@ def list_owned_cases(
                     )
                     for face in photos
                 ],
+                my_image_url=my_image_url,
+                other_image_url=other_image_url,
             )
         )
     return OwnedCaseListResponse(results=results)

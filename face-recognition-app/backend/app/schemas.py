@@ -99,6 +99,8 @@ class OwnedCaseOut(CaseOut):
     match_count: int
     match_state: str
     photos: list[CasePhotoOut]
+    my_image_url: str | None = None
+    other_image_url: str | None = None
 
 
 class OwnedCaseListResponse(BaseModel):
