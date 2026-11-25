@@ -45,10 +45,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ReuniteNow'), findsOneWidget);
-    expect(find.text('Find a missing person'), findsOneWidget);
+    expect(find.text('Search for a Missing Person'), findsOneWidget);
     expect(
       find.textContaining(
-        'Using AI, this app compares uploaded photos from missing-person',
+        'This app supports the search for missing people by face recognition',
       ),
       findsOneWidget,
     );

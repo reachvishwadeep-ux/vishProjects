@@ -182,40 +182,8 @@ class _MatchScreenState extends State<MatchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .16),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: .18),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lock_outline_rounded,
-                        color: Colors.white,
-                        size: 13,
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        'REMOTE RECOGNITION',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: .7,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
                 Text(
-                  'Find a missing person',
+                  'Search for a Missing Person',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -225,10 +193,11 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Using AI, this app compares uploaded photos from '
-                  'missing-person and found-person cases. If it identifies a '
-                  'potential match, it displays a confidence score and helps '
-                  'connect the people who submitted the cases.',
+                  'This app supports the search for missing people by face '
+                  'recognition of uploaded photos of missing and found '
+                  'individuals. Whenever it identifies a possible match, it '
+                  'displays a confidence score and connects the people who '
+                  'submitted the photos.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .82),
                     height: 1.45,
