@@ -183,7 +183,7 @@ class _MatchScreenState extends State<MatchScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Search for a Missing Person',
+                  'Missing Person Search',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -301,7 +301,7 @@ class _MatchScreenState extends State<MatchScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'One clear, unobstructed face in each photo',
+                          'Single clear face',
                           style: TextStyle(color: brandMuted, fontSize: 12),
                         ),
                       ],
@@ -350,11 +350,6 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
-            'Why ReuniteNow?',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 11),
           const Row(
             children: [
               Expanded(

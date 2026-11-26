@@ -112,7 +112,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('My Cases'), findsOneWidget);
+    expect(find.text('Cases'), findsOneWidget);
     expect(find.text('MISSING PERSON'), findsOneWidget);
     expect(find.text('Searching for potential matches'), findsOneWidget);
 

@@ -45,7 +45,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ReuniteNow'), findsOneWidget);
-    expect(find.text('Search for a Missing Person'), findsOneWidget);
+    expect(find.text('Missing Person Search'), findsOneWidget);
     expect(
       find.textContaining(
         'This app supports the search for missing people by face recognition',
@@ -72,7 +72,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('My Cases'));
+    await tester.tap(find.text('Cases'));
     await tester.pumpAndSettle();
 
     expect(find.text('No uploaded cases yet'), findsOneWidget);

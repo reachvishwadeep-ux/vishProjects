@@ -117,12 +117,12 @@ class _AppShellState extends State<AppShell> {
                   NavigationDestination(
                     icon: Icon(Icons.add_photo_alternate_outlined),
                     selectedIcon: Icon(Icons.add_photo_alternate_rounded),
-                    label: 'Upload',
+                    label: 'Home',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.folder_shared_outlined),
                     selectedIcon: Icon(Icons.folder_shared_rounded),
-                    label: 'My Cases',
+                    label: 'Cases',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.favorite_border_rounded),

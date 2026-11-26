@@ -79,7 +79,7 @@ class _MyCasesScreenState extends State<MyCasesScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'My Cases',
+                        'Cases',
                         style: Theme.of(context)
                             .textTheme
                             .headlineMedium
@@ -160,7 +160,7 @@ class _MyCasesScreenState extends State<MyCasesScreen> {
                     ),
                     SizedBox(height: 6),
                     Text(
-                      'Submit missing- or found-person photos from Upload. '
+                      'Submit missing- or found-person photos from Home. '
                       'They will appear here while ReuniteNow keeps searching.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: brandMuted),
