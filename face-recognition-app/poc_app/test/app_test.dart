@@ -46,12 +46,21 @@ void main() {
 
     expect(find.text('ReuniteNow'), findsOneWidget);
     expect(find.text('Missing Person Search'), findsOneWidget);
+    final heroHeading = tester.widget<Text>(
+      find.text('Missing Person Search'),
+    );
+    expect(heroHeading.textAlign, TextAlign.center);
+    expect(heroHeading.maxLines, 1);
+    expect(heroHeading.style?.fontSize, 26);
+    expect(heroHeading.style?.fontWeight, FontWeight.w700);
     expect(
       find.textContaining(
         'This app supports the search for missing people by face recognition',
       ),
       findsOneWidget,
     );
+    expect(find.text('Fast scan'), findsNothing);
+    expect(find.text('Shared search'), findsNothing);
     expect(find.text('I’m looking for someone'), findsOneWidget);
     expect(find.text('I found someone'), findsOneWidget);
 
@@ -62,6 +71,14 @@ void main() {
     );
     expect(find.text('Choose up to 5 from Gallery'), findsOneWidget);
     expect(find.text('Single Clear Face'), findsOneWidget);
+    final photoUploadCard = tester.widget<Container>(
+      find.byKey(const ValueKey('photo-upload-card')),
+    );
+    expect(photoUploadCard.constraints?.minHeight, 174);
+    expect(
+      photoUploadCard.padding,
+      const EdgeInsets.fromLTRB(16, 18, 16, 24),
+    );
 
     await tester.scrollUntilVisible(
       find.textContaining('A simple background can help face detection'),

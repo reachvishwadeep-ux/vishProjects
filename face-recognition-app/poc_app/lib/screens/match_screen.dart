@@ -167,10 +167,11 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           const SizedBox(height: 22),
           Container(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 21),
+            key: const ValueKey('home-hero-card'),
+            padding: const EdgeInsets.fromLTRB(22, 16, 22, 17),
             decoration: BoxDecoration(
               gradient: brandGradient,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(26),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x367057F5),
@@ -182,16 +183,25 @@ class _MatchScreenState extends State<MatchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Missing Person Search',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                const SizedBox(
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Missing Person Search',
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
                         height: 1.05,
-                        letterSpacing: -1.1,
+                        letterSpacing: -.5,
                       ),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
                   'This app supports the search for missing people by face '
                   'recognition of uploaded photos of missing and found '
@@ -200,20 +210,10 @@ class _MatchScreenState extends State<MatchScreen> {
                   'submitted the photos.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .82),
-                    height: 1.45,
+                    height: 1.3,
                     fontSize: 14,
+                    fontWeight: FontWeight.w400,
                   ),
-                ),
-                const SizedBox(height: 18),
-                const Row(
-                  children: [
-                    _HeroFact(icon: Icons.bolt_rounded, label: 'Fast scan'),
-                    SizedBox(width: 9),
-                    _HeroFact(
-                      icon: Icons.cloud_outlined,
-                      label: 'Shared search',
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -258,7 +258,9 @@ class _MatchScreenState extends State<MatchScreen> {
                 child: CustomPaint(
                   foregroundPainter: const _DashedBorderPainter(),
                   child: Container(
-                    height: 152,
+                    key: const ValueKey('photo-upload-card'),
+                    constraints: const BoxConstraints(minHeight: 174),
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       gradient: brandSoftGradient,
@@ -288,7 +290,7 @@ class _MatchScreenState extends State<MatchScreen> {
                             size: 27,
                           ),
                         ),
-                        const SizedBox(height: 13),
+                        const SizedBox(height: 12),
                         Text(
                           _isLooking
                               ? 'Add 1–5 photos of the missing person'
@@ -299,10 +301,14 @@ class _MatchScreenState extends State<MatchScreen> {
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         const Text(
                           'Single Clear Face',
-                          style: TextStyle(color: brandMuted, fontSize: 14),
+                          style: TextStyle(
+                            color: brandMuted,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
@@ -430,38 +436,6 @@ class _IntentCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HeroFact extends StatelessWidget {
-  const _HeroFact({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .13),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white, size: 14),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
       ),
     );
   }
