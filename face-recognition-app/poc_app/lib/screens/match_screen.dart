@@ -301,8 +301,8 @@ class _MatchScreenState extends State<MatchScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'Single clear face',
-                          style: TextStyle(color: brandMuted, fontSize: 12),
+                          'Single Clear Face',
+                          style: TextStyle(color: brandMuted, fontSize: 14),
                         ),
                       ],
                     ),
@@ -348,26 +348,6 @@ class _MatchScreenState extends State<MatchScreen> {
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-          const Row(
-            children: [
-              Expanded(
-                child: _BenefitCard(
-                  icon: Icons.shield_outlined,
-                  title: 'Controlled',
-                  description: 'Contact shared only after disclosure',
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _BenefitCard(
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Shared',
-                  description: 'Searches the opposite repository',
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -479,65 +459,6 @@ class _HeroFact extends StatelessWidget {
               color: Colors.white,
               fontSize: 11,
               fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BenefitCard extends StatelessWidget {
-  const _BenefitCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: brandBorder),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12382E64),
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: const BoxDecoration(
-              color: brandLavender,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: brandPurple, size: 19),
-          ),
-          const SizedBox(height: 11),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            description,
-            style: const TextStyle(
-              color: brandMuted,
-              fontSize: 11,
-              height: 1.3,
             ),
           ),
         ],

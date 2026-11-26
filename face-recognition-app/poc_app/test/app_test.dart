@@ -61,6 +61,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Choose up to 5 from Gallery'), findsOneWidget);
+    expect(find.text('Single Clear Face'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.textContaining('A simple background can help face detection'),
@@ -71,6 +72,8 @@ void main() {
       find.textContaining('A simple background can help face detection'),
       findsOneWidget,
     );
+    expect(find.text('Controlled'), findsNothing);
+    expect(find.text('Shared'), findsNothing);
 
     await tester.tap(find.text('Cases'));
     await tester.pumpAndSettle();
