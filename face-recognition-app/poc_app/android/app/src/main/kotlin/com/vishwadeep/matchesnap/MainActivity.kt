@@ -1,4 +1,4 @@
-package com.facerec.poc_app
+package com.vishwadeep.matchesnap
 
 import io.flutter.embedding.android.FlutterActivity
 

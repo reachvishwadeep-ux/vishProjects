@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
+import 'package:poc_app/connections/connection_repository.dart';
 import 'package:poc_app/app_state.dart';
 import 'package:poc_app/main.dart';
 import 'package:poc_app/matching/perceptual_matcher.dart';
@@ -40,37 +44,60 @@ void main() {
     });
     await tester.pumpAndSettle();
 
-    expect(find.text('Find a missing person'), findsOneWidget);
+    expect(find.text('ReuniteNow'), findsOneWidget);
+    expect(find.text('Missing Person Search'), findsOneWidget);
+    final heroHeading = tester.widget<Text>(
+      find.text('Missing Person Search'),
+    );
+    expect(heroHeading.textAlign, TextAlign.center);
+    expect(heroHeading.maxLines, 1);
+    expect(heroHeading.style?.fontSize, 26);
+    expect(heroHeading.style?.fontWeight, FontWeight.w700);
+    expect(
+      find.textContaining(
+        'This app supports the search for missing people by comparing',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('helps connect the people'), findsOneWidget);
+    expect(find.text('Fast scan'), findsNothing);
+    expect(find.text('Shared search'), findsNothing);
     expect(find.text('I’m looking for someone'), findsOneWidget);
     expect(find.text('I found someone'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Choose from Gallery'),
+      find.text('Choose up to 5 from Gallery'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Choose from Gallery'), findsOneWidget);
-
-    await tester.tap(find.text('Saved Info'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No saved images yet'), findsOneWidget);
-  });
-
-  testWidgets('stored images appear in the repository tab', (tester) async {
-    // Adding hashes in a real isolate, so it has to run outside the fake clock.
-    await tester.runAsync(
-      () => state.addImage(bytes: _jpeg(), label: 'Amber Ridge'),
+    expect(find.text('Choose up to 5 from Gallery'), findsOneWidget);
+    expect(find.text('Single Clear Face'), findsOneWidget);
+    final photoUploadCard = tester.widget<Container>(
+      find.byKey(const ValueKey('photo-upload-card')),
+    );
+    expect(photoUploadCard.constraints?.minHeight, 174);
+    expect(
+      photoUploadCard.padding,
+      const EdgeInsets.fromLTRB(16, 18, 16, 24),
     );
 
-    await tester.pumpWidget(PocApp(state: state));
+    await tester.scrollUntilVisible(
+      find.textContaining('A simple background can help face detection'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.textContaining('A simple background can help face detection'),
+      findsOneWidget,
+    );
+    expect(find.text('Controlled'), findsNothing);
+    expect(find.text('Shared'), findsNothing);
+
+    await tester.tap(find.text('Cases'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Saved Info'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Amber Ridge'), findsOneWidget);
-    expect(find.textContaining('1 saved image'), findsOneWidget);
+    expect(find.text('No uploaded cases yet'), findsOneWidget);
+    expect(find.text('Saved Info'), findsNothing);
   });
 
   testWidgets('the result screen reports a match with its candidates',
@@ -114,5 +141,116 @@ void main() {
     expect(find.text('Potential match found'), findsOneWidget);
     expect(find.text('Amber Ridge'), findsOneWidget);
     expect(find.text('97%'), findsOneWidget);
+  });
+
+  testWidgets('requesting a secure connection opens that match consent page',
+      (tester) async {
+    final bytes = _jpeg();
+    final requests = <String>[];
+    final connections = ConnectionRepository(
+      baseUrl: 'https://api.example.com',
+      tokenProvider: () async => 'access-token',
+      onAuthenticationFailure: () async {},
+      client: MockClient((request) async {
+        requests.add('${request.method} ${request.url.path}');
+        return http.Response(
+          jsonEncode({
+            'results': [
+              {
+                'id': 'other-connection',
+                'role': 'missing',
+                'status': 'pending_consent',
+                'my_case_id': 'my-case',
+                'other_case_id': 'other-case',
+                'other_subject_label': 'Unrelated case',
+                'score': 0.8,
+                'image_url': null,
+                'my_consented': false,
+                'other_consented': false,
+                'my_contact_sharing_consented': true,
+                'other_contact_sharing_consented': true,
+                'other_phone_number': '+919000000003',
+                'my_verified_peer': false,
+                'other_verified_peer': false,
+                'unread': true,
+                'meeting_code': null,
+                'meeting_code_expires_at': null,
+                'created_at': '2026-10-01T12:00:00Z',
+              },
+              {
+                'id': 'matched-connection',
+                'role': 'missing',
+                'status': 'pending_consent',
+                'my_case_id': 'my-case',
+                'other_case_id': 'found-case',
+                'other_subject_label': 'Possible found-person case',
+                'score': 0.88,
+                'image_url': null,
+                'my_consented': false,
+                'other_consented': false,
+                'my_contact_sharing_consented': true,
+                'other_contact_sharing_consented': true,
+                'other_phone_number': '+919000000002',
+                'my_verified_peer': false,
+                'other_verified_peer': false,
+                'unread': true,
+                'meeting_code': null,
+                'meeting_code_expires_at': null,
+                'created_at': '2026-10-01T12:00:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: ResultScreen(
+          probe: bytes,
+          connections: connections,
+          outcome: MatchOutcome(
+            decision: Decision.match,
+            candidates: [
+              MatchCandidate(
+                image: StoredImage.remote(
+                  id: 'found-case',
+                  label: 'Found person submission',
+                  remoteUrl: null,
+                ),
+                score: 0.88,
+                structureScore: 0.88,
+                colourScore: 0.88,
+                connectionId: 'matched-connection',
+              ),
+            ],
+            matcherName: 'ArcFace (remote service)',
+            duration: const Duration(milliseconds: 12),
+            comparisons: 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('View matched contact'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('View matched contact'));
+    await tester.pumpAndSettle();
+
+    expect(requests, ['GET /v1/connections']);
+    expect(find.text('Secure connection'), findsOneWidget);
+    expect(find.text('Possible found-person case'), findsOneWidget);
+    expect(find.text('Unrelated case'), findsNothing);
+    expect(find.text('+919000000002'), findsOneWidget);
+    expect(
+      find.text('Secure contact requests are not enabled yet.'),
+      findsNothing,
+    );
   });
 }

@@ -39,8 +39,12 @@ class Settings(BaseSettings):
     otp_max_requests_per_hour: int = 5
     otp_max_verification_attempts: int = 5
     otp_delivery_mode: str = "development"
+    app_review_phone_number: str | None = None
+    app_review_otp_code: str | None = None
     telnyx_api_key: str | None = None
     telnyx_verify_profile_id: str | None = None
+    push_notifications_enabled: bool = False
+    firebase_service_account_json: str | None = None
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_verify_service_sid: str | None = None

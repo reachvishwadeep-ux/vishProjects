@@ -1,9 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
+import '../matching/matcher.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'active_upload_screen.dart';
@@ -23,33 +22,63 @@ class _MatchScreenState extends State<MatchScreen> {
   AppState get state => widget.state;
   bool get _isLooking => _caseType == CaseType.missing;
 
-  Future<void> _pick(BuildContext context, ImageSource source) async {
+  Future<void> _pickGallery(BuildContext context) async {
+    final picked = await ImagePicker().pickMultiImage(
+      imageQuality: 92,
+      maxWidth: 1800,
+      limit: 5,
+    );
+    if (picked.isEmpty) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await _openPicked(context, picked);
+  }
+
+  Future<void> _pickCamera(BuildContext context) async {
     final picked = await ImagePicker().pickImage(
-      source: source,
+      source: ImageSource.camera,
       imageQuality: 92,
       maxWidth: 1800,
     );
     if (picked == null) {
       return;
     }
-    final bytes = await picked.readAsBytes();
     if (!context.mounted) {
       return;
     }
-    _openActiveUpload(context, bytes, picked.name);
+    await _openPicked(context, [picked]);
+  }
+
+  Future<void> _openPicked(
+    BuildContext context,
+    List<XFile> picked,
+  ) async {
+    final photos = await Future.wait(
+      picked.map(
+        (photo) async => MatchPhoto(
+          bytes: await photo.readAsBytes(),
+          fileName: photo.name,
+        ),
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    _openActiveUpload(context, photos);
   }
 
   void _openActiveUpload(
     BuildContext context,
-    Uint8List bytes,
-    String fileName,
+    List<MatchPhoto> photos,
   ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ActiveUploadScreen(
           state: state,
-          probe: bytes,
-          fileName: fileName,
+          photos: photos,
           caseType: _caseType,
         ),
       ),
@@ -72,7 +101,7 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
             SizedBox(height: 12),
             Text(
-              'Choose a photo and MatchSnap uploads it to the recognition service. Missing-person photos search the found repository, and found-person photos search the missing repository.',
+              'Choose up to five photos of the same person. ReuniteNow checks every photo before searching the opposite repository.',
               style: TextStyle(color: brandMuted, height: 1.5),
             ),
             SizedBox(height: 12),
@@ -116,7 +145,7 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
               const SizedBox(width: 11),
               const Text(
-                'MatchSnap',
+                'ReuniteNow',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
@@ -138,10 +167,11 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           const SizedBox(height: 22),
           Container(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 21),
+            key: const ValueKey('home-hero-card'),
+            padding: const EdgeInsets.fromLTRB(22, 16, 22, 17),
             decoration: BoxDecoration(
               gradient: brandGradient,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(26),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x367057F5),
@@ -153,68 +183,36 @@ class _MatchScreenState extends State<MatchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .16),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: .18),
+                const SizedBox(
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Missing Person Search',
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        height: 1.05,
+                        letterSpacing: -.5,
+                      ),
                     ),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lock_outline_rounded,
-                        color: Colors.white,
-                        size: 13,
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        'REMOTE RECOGNITION',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: .7,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 10),
                 Text(
-                  'Find a missing person',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        height: 1.05,
-                        letterSpacing: -1.1,
-                      ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'This app matches the uploaded image against similar images '
-                  'of people who have been found. If there is a potential '
-                  'match, it will connect you with the other person.',
+                  'This app supports the search for missing people by '
+                  'comparing uploaded photos of missing and found individuals. '
+                  'It highlights any potential matches with a confidence score '
+                  'and helps connect the people who submitted the photos.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .82),
-                    height: 1.45,
+                    height: 1.3,
                     fontSize: 14,
+                    fontWeight: FontWeight.w400,
                   ),
-                ),
-                const SizedBox(height: 18),
-                const Row(
-                  children: [
-                    _HeroFact(icon: Icons.bolt_rounded, label: 'Fast scan'),
-                    SizedBox(width: 9),
-                    _HeroFact(
-                      icon: Icons.cloud_outlined,
-                      label: 'Shared search',
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -255,13 +253,13 @@ class _MatchScreenState extends State<MatchScreen> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: GestureDetector(
-                onTap: state.matching
-                    ? null
-                    : () => _pick(context, ImageSource.gallery),
+                onTap: state.matching ? null : () => _pickGallery(context),
                 child: CustomPaint(
                   foregroundPainter: const _DashedBorderPainter(),
                   child: Container(
-                    height: 152,
+                    key: const ValueKey('photo-upload-card'),
+                    constraints: const BoxConstraints(minHeight: 174),
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       gradient: brandSoftGradient,
@@ -291,21 +289,25 @@ class _MatchScreenState extends State<MatchScreen> {
                             size: 27,
                           ),
                         ),
-                        const SizedBox(height: 13),
+                        const SizedBox(height: 12),
                         Text(
                           _isLooking
-                              ? 'Add a photo of the missing person'
-                              : 'Add a photo of the person found',
+                              ? 'Add 1–5 photos of the missing person'
+                              : 'Add 1–5 photos of the person found',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         const Text(
-                          'JPG or PNG from your device',
-                          style: TextStyle(color: brandMuted, fontSize: 12),
+                          'Single Clear Face',
+                          style: TextStyle(
+                            color: brandMuted,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
@@ -316,47 +318,41 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           const SizedBox(height: 14),
           _GradientButton(
-            onPressed: state.matching
-                ? null
-                : () => _pick(context, ImageSource.gallery),
+            onPressed: state.matching ? null : () => _pickGallery(context),
             icon: Icons.photo_library_outlined,
-            label: 'Choose from Gallery',
+            label: 'Choose up to 5 from Gallery',
           ),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: state.matching
-                  ? null
-                  : () => _pick(context, ImageSource.camera),
+              onPressed: state.matching ? null : () => _pickCamera(context),
               icon: const Icon(Icons.camera_alt_outlined, size: 19),
               label: const Text('Take a photo'),
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Why MatchSnap?',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 11),
-          const Row(
-            children: [
-              Expanded(
-                child: _BenefitCard(
-                  icon: Icons.shield_outlined,
-                  title: 'Controlled',
-                  description: 'No automatic contact sharing',
-                ),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.tips_and_updates_outlined, color: brandPurple),
+                  SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      'For reliable matching, use sharp, well-lit photos with one person, an unobstructed face, and different angles. A simple background can help face detection, but the face quality matters most.',
+                      style: TextStyle(
+                        color: brandMuted,
+                        height: 1.45,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _BenefitCard(
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Shared',
-                  description: 'Searches the opposite repository',
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -439,97 +435,6 @@ class _IntentCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _HeroFact extends StatelessWidget {
-  const _HeroFact({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .13),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white, size: 14),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BenefitCard extends StatelessWidget {
-  const _BenefitCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: brandBorder),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12382E64),
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: const BoxDecoration(
-              color: brandLavender,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: brandPurple, size: 19),
-          ),
-          const SizedBox(height: 11),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            description,
-            style: const TextStyle(
-              color: brandMuted,
-              fontSize: 11,
-              height: 1.3,
-            ),
-          ),
-        ],
       ),
     );
   }

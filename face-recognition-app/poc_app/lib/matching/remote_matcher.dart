@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models.dart';
 import 'matcher.dart';
 
-class RemoteMatcher implements Matcher {
+class RemoteMatcher extends Matcher {
   RemoteMatcher({
     required this.baseUrl,
     http.Client? client,
@@ -32,7 +32,27 @@ class RemoteMatcher implements Matcher {
     required CaseType caseType,
     required String fileName,
     int topK = 5,
+  }) {
+    return matchPhotos(
+      photos: [MatchPhoto(bytes: probe, fileName: fileName)],
+      gallery: gallery,
+      caseType: caseType,
+      topK: topK,
+    );
+  }
+
+  @override
+  Future<MatchOutcome> matchPhotos({
+    required List<MatchPhoto> photos,
+    required List<StoredImage> gallery,
+    required CaseType caseType,
+    int topK = 5,
   }) async {
+    if (photos.isEmpty || photos.length > 5) {
+      throw const RemoteRecognitionException(
+        'Choose between 1 and 5 photos for this person.',
+      );
+    }
     final stopwatch = Stopwatch()..start();
     final request = http.MultipartRequest(
       'POST',
@@ -40,14 +60,16 @@ class RemoteMatcher implements Matcher {
     )
       ..fields['case_type'] = caseType.name
       ..fields['subject_label'] = _subjectLabel(caseType)
-      ..fields['top_k'] = topK.toString()
-      ..files.add(
+      ..fields['top_k'] = topK.toString();
+    for (final photo in photos) {
+      request.files.add(
         http.MultipartFile.fromBytes(
-          'image',
-          probe,
-          filename: fileName,
+          'images',
+          photo.bytes,
+          filename: photo.fileName,
         ),
       );
+    }
     final accessToken = await tokenProvider?.call();
     if (tokenProvider != null && accessToken == null) {
       throw const RemoteRecognitionException(
@@ -76,7 +98,7 @@ class RemoteMatcher implements Matcher {
       );
     }
     if (response.statusCode != 201) {
-      throw RemoteRecognitionException(_errorMessage(response));
+      throw _recognitionError(response);
     }
 
     final payload = jsonDecode(response.body) as Map<String, Object?>;
@@ -93,6 +115,7 @@ class RemoteMatcher implements Matcher {
             score: (item['score']! as num).toDouble(),
             structureScore: (item['score']! as num).toDouble(),
             colourScore: (item['score']! as num).toDouble(),
+            connectionId: item['connection_id'] as String?,
           ),
         )
         .toList();
@@ -121,31 +144,61 @@ class RemoteMatcher implements Matcher {
     };
   }
 
-  String _errorMessage(http.Response response) {
+  RemoteRecognitionException _recognitionError(http.Response response) {
     try {
       final payload = jsonDecode(response.body) as Map<String, Object?>;
       final detail = payload['detail'];
       if (detail is String) {
-        return detail;
+        return RemoteRecognitionException(detail);
       }
       if (detail is Map<String, Object?>) {
-        final reasons = detail['reasons'];
-        if (reasons is List<Object?> && reasons.isNotEmpty) {
-          return reasons.join(', ');
+        final error = detail['error']?.toString();
+        final reasonValues = detail['reasons'];
+        final reasons = reasonValues is List<Object?>
+            ? reasonValues.map((reason) => reason.toString()).toList()
+            : const <String>[];
+        final photoIndex = (detail['photo_index'] as num?)?.toInt();
+        if (photoIndex != null && error != null) {
+          final message =
+              reasons.isEmpty ? error : '$error ${reasons.join(' ')}';
+          return RemoteRecognitionException(
+            message,
+            photoIndex: photoIndex,
+            reasons: reasons,
+          );
         }
-        return detail['error']?.toString() ?? 'Remote recognition failed.';
+        if (reasons.isNotEmpty) {
+          return RemoteRecognitionException(
+            reasons.join(', '),
+            photoIndex: photoIndex,
+            reasons: reasons,
+          );
+        }
+        if (error != null) {
+          return RemoteRecognitionException(error);
+        }
       }
     } on FormatException {
-      return 'Remote recognition failed (${response.statusCode}).';
+      return RemoteRecognitionException(
+        'Remote recognition failed (${response.statusCode}).',
+      );
     }
-    return 'Remote recognition failed (${response.statusCode}).';
+    return RemoteRecognitionException(
+      'Remote recognition failed (${response.statusCode}).',
+    );
   }
 }
 
 class RemoteRecognitionException implements Exception {
-  const RemoteRecognitionException(this.message);
+  const RemoteRecognitionException(
+    this.message, {
+    this.photoIndex,
+    this.reasons = const [],
+  });
 
   final String message;
+  final int? photoIndex;
+  final List<String> reasons;
 
   @override
   String toString() => message;

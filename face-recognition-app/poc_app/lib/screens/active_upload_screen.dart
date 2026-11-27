@@ -1,8 +1,9 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
+import '../matching/matcher.dart';
+import '../matching/remote_matcher.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'result_screen.dart';
@@ -11,14 +12,12 @@ class ActiveUploadScreen extends StatefulWidget {
   const ActiveUploadScreen({
     super.key,
     required this.state,
-    required this.probe,
-    required this.fileName,
+    required this.photos,
     required this.caseType,
   });
 
   final AppState state;
-  final Uint8List probe;
-  final String fileName;
+  final List<MatchPhoto> photos;
   final CaseType caseType;
 
   @override
@@ -26,23 +25,111 @@ class ActiveUploadScreen extends StatefulWidget {
 }
 
 class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
+  late final List<MatchPhoto> _photos;
   MatchOutcome? _outcome;
   Object? _error;
+  var _searching = false;
+
+  bool get _canEdit => !_searching && _outcome == null;
+
+  int? get _rejectedPhotoIndex {
+    final error = _error;
+    if (error is! RemoteRecognitionException) {
+      return null;
+    }
+    final index = error.photoIndex;
+    if (index == null || index < 1 || index > _photos.length) {
+      return null;
+    }
+    return index - 1;
+  }
 
   @override
   void initState() {
     super.initState();
-    _search();
+    _photos = List<MatchPhoto>.of(widget.photos);
+  }
+
+  Future<MatchPhoto> _readPhoto(XFile picked) async {
+    return MatchPhoto(
+      bytes: await picked.readAsBytes(),
+      fileName: picked.name,
+    );
+  }
+
+  Future<void> _addPhotos() async {
+    final remaining = 5 - _photos.length;
+    if (!_canEdit || remaining <= 0) {
+      return;
+    }
+    final picked = await ImagePicker().pickMultiImage(
+      imageQuality: 92,
+      maxWidth: 1800,
+      limit: remaining,
+    );
+    if (picked.isEmpty || !mounted) {
+      return;
+    }
+    final additions = await Future.wait(picked.take(remaining).map(_readPhoto));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _photos.addAll(additions);
+      _clearError();
+    });
+  }
+
+  Future<void> _replacePhoto(int index) async {
+    if (!_canEdit) {
+      return;
+    }
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 92,
+      maxWidth: 1800,
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    final replacement = await _readPhoto(picked);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _photos[index] = replacement;
+      _clearError();
+    });
+  }
+
+  void _removePhoto(int index) {
+    if (!_canEdit) {
+      return;
+    }
+    setState(() {
+      _photos.removeAt(index);
+      _clearError();
+    });
+  }
+
+  void _clearError() {
+    _error = null;
   }
 
   Future<void> _search() async {
+    if (_photos.isEmpty || _searching) {
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _error = null;
+      _outcome = null;
+    });
     try {
-      final match = widget.state.compare(
-        widget.probe,
+      final outcome = await widget.state.comparePhotos(
+        List<MatchPhoto>.unmodifiable(_photos),
         caseType: widget.caseType,
-        fileName: widget.fileName,
       );
-      final outcome = await match;
       if (mounted) {
         setState(() => _outcome = outcome);
       }
@@ -50,29 +137,39 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
       if (mounted) {
         setState(() => _error = error);
       }
+    } finally {
+      if (mounted) {
+        setState(() => _searching = false);
+      }
     }
   }
 
   void _showResult() {
     final outcome = _outcome;
-    if (outcome == null) {
+    if (outcome == null || _photos.isEmpty) {
       return;
     }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => ResultScreen(probe: widget.probe, outcome: outcome),
+        builder: (_) => ResultScreen(
+          probe: _photos.first.bytes,
+          outcome: outcome,
+          connections: widget.state.connections,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final sizeMb = widget.probe.lengthInBytes / (1024 * 1024);
     final complete = _outcome != null;
+    final hasError = _error != null;
+    final photoCount = _photos.length;
+    final photoLabel = photoCount == 1 ? '1 photo' : '$photoCount photos';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Matching photo'),
+        title: const Text('Review photos'),
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_rounded),
@@ -84,275 +181,133 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
           padding: const EdgeInsets.fromLTRB(18, 4, 18, 28),
           children: [
             Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                decoration: BoxDecoration(
-                  color: _error != null
-                      ? const Color(0xFFFFEDED)
-                      : complete
-                          ? const Color(0xFFE9F9F1)
-                          : brandLavender,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _error != null
-                          ? Icons.error_outline_rounded
-                          : complete
-                              ? Icons.check_circle_outline_rounded
-                              : Icons.radar_rounded,
-                      color: _error != null
-                          ? const Color(0xFFD45757)
-                          : complete
-                              ? brandGreen
-                              : brandPurple,
-                      size: 15,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _error != null
-                          ? 'SCAN INTERRUPTED'
-                          : complete
-                              ? 'SEARCH COMPLETE'
-                              : 'REMOTE SEARCH ACTIVE',
-                      style: TextStyle(
-                        color: _error != null
-                            ? const Color(0xFFD45757)
-                            : complete
-                                ? brandGreen
-                                : brandPurple,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .6,
-                      ),
-                    ),
-                  ],
-                ),
+              child: _StatusChip(
+                error: hasError,
+                complete: complete,
+                searching: _searching,
               ),
             ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                gradient: brandGradient,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x297057F5),
-                    blurRadius: 24,
-                    offset: Offset(0, 10),
+            const SizedBox(height: 16),
+            Text(
+              complete
+                  ? 'Your result is ready'
+                  : hasError
+                      ? 'One photo needs attention'
+                      : _searching
+                          ? 'Checking $photoLabel...'
+                          : 'Review selected photos',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.4,
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Stack(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1.22,
-                      child: Image.memory(widget.probe, fit: BoxFit.cover),
-                    ),
-                    Positioned(
-                      left: 10,
-                      right: 10,
-                      bottom: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 9,
-                        ),
-                        decoration: BoxDecoration(
-                          color: brandInk.withValues(alpha: .78),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.image_outlined,
-                              size: 17,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                widget.fileName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              '${sizeMb.toStringAsFixed(sizeMb < 1 ? 2 : 1)} MB',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: .72),
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              complete
+                  ? 'All $photoLabel passed validation and the remote comparison finished successfully.'
+                  : hasError
+                      ? _error.toString()
+                      : _searching
+                          ? 'Each photo is being validated before the remote comparison.'
+                          : 'Remove or replace any photo before starting the search.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: brandMuted,
+                height: 1.45,
+                fontSize: 13,
               ),
             ),
             const SizedBox(height: 18),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        _ProcessStep(
-                          icon: Icons.upload_rounded,
-                          label: 'Ready',
-                          active: true,
-                          complete: true,
-                        ),
-                        const _ProcessLine(active: true),
-                        _ProcessStep(
-                          icon: Icons.search_rounded,
-                          label: 'Scanning',
-                          active: !complete && _error == null,
-                          complete: complete,
-                        ),
-                        _ProcessLine(active: complete),
-                        _ProcessStep(
-                          icon: Icons.flag_outlined,
-                          label: 'Result',
-                          active: complete,
-                          complete: false,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      child: Container(
-                        key: ValueKey('${_error != null}-$complete'),
-                        width: 68,
-                        height: 68,
-                        decoration: BoxDecoration(
-                          color: _error != null
-                              ? const Color(0xFFFFEDED)
-                              : complete
-                                  ? const Color(0xFFE9F9F1)
-                                  : brandLavender,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: _error != null
-                              ? const Icon(
-                                  Icons.error_outline_rounded,
-                                  color: Color(0xFFD45757),
-                                  size: 30,
-                                )
-                              : complete
-                                  ? const Icon(
-                                      Icons.check_rounded,
-                                      color: brandGreen,
-                                      size: 31,
-                                    )
-                                  : const SizedBox(
-                                      width: 28,
-                                      height: 28,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.7,
-                                        color: brandPurple,
-                                      ),
-                                    ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: Text(
-                        _error != null
-                            ? 'Unable to scan this image'
-                            : complete
-                                ? 'Your result is ready'
-                                : 'Searching for matches...',
-                        key: ValueKey('${_error != null}-$complete-title'),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -.3,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _error != null
-                          ? 'Choose another supported image and try again.'
-                          : complete
-                              ? 'The remote comparison finished successfully.'
-                              : 'Uploading and searching the opposite MatchSnap repository.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: brandMuted,
-                        height: 1.45,
-                        fontSize: 13,
-                      ),
-                    ),
-                    if (!complete && _error == null) ...[
-                      const SizedBox(height: 20),
-                      const ClipRRect(
-                        borderRadius: BorderRadius.all(Radius.circular(20)),
-                        child: LinearProgressIndicator(
-                          minHeight: 7,
-                          color: brandPurple,
-                          backgroundColor: brandLavender,
-                        ),
-                      ),
-                      const SizedBox(height: 9),
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.lock_outline_rounded,
-                            color: brandMuted,
-                            size: 13,
-                          ),
-                          SizedBox(width: 5),
-                          Text(
-                            'Processing on the remote recognition service',
-                            style: TextStyle(
-                              color: brandMuted,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (complete) ...[
-                      const SizedBox(height: 20),
-                      FilledButton.icon(
-                        onPressed: _showResult,
-                        icon: const Icon(Icons.arrow_forward_rounded),
-                        label: const Text('View result'),
-                      ),
-                    ],
-                  ],
+            if (_photos.isEmpty)
+              _EmptySelection(onAdd: _addPhotos)
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _photos.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: .76,
+                ),
+                itemBuilder: (context, index) {
+                  return _EditablePhotoCard(
+                    key: ValueKey('photo-card-$index'),
+                    photo: _photos[index],
+                    number: index + 1,
+                    rejected: index == _rejectedPhotoIndex,
+                    editable: _canEdit,
+                    onRemove: () => _removePhoto(index),
+                    onReplace: () => _replacePhoto(index),
+                  );
+                },
+              ),
+            if (_photos.isNotEmpty && _photos.length < 5 && _canEdit) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const ValueKey('add-photos-button'),
+                onPressed: _addPhotos,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text('Add photos (${_photos.length}/5)'),
+              ),
+            ],
+            const SizedBox(height: 18),
+            if (_searching) ...[
+              const ClipRRect(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                child: LinearProgressIndicator(
+                  minHeight: 7,
+                  color: brandPurple,
+                  backgroundColor: brandLavender,
                 ),
               ),
+              const SizedBox(height: 10),
+              const Text(
+                'Processing on the remote recognition service',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: brandMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ] else if (complete)
+              FilledButton.icon(
+                onPressed: _showResult,
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('View result'),
+              )
+            else
+              FilledButton.icon(
+                key: const ValueKey('search-photos-button'),
+                onPressed: _photos.isEmpty ? null : _search,
+                icon: Icon(
+                  hasError ? Icons.refresh_rounded : Icons.search_rounded,
+                ),
+                label: Text(hasError ? 'Try again' : 'Search for matches'),
+              ),
+            if (hasError && _rejectedPhotoIndex != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Photo ${_rejectedPhotoIndex! + 1} is highlighted. '
+                'Remove or replace it, then try again.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFFD45757),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            TextButton.icon(
+              onPressed: _searching ? null : () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Choose different photos'),
             ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Upload another snap'),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             const Text(
               'Recognition and matching run on the configured remote service',
               textAlign: TextAlign.center,
@@ -365,66 +320,226 @@ class _ActiveUploadScreenState extends State<ActiveUploadScreen> {
   }
 }
 
-class _ProcessStep extends StatelessWidget {
-  const _ProcessStep({
-    required this.icon,
-    required this.label,
-    required this.active,
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.error,
     required this.complete,
+    required this.searching,
   });
 
-  final IconData icon;
-  final String label;
-  final bool active;
+  final bool error;
   final bool complete;
+  final bool searching;
 
   @override
   Widget build(BuildContext context) {
-    final highlighted = active || complete;
-    return Column(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: highlighted ? brandLavender : brandSurfaceStrong,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: highlighted ? brandPurple : brandBorder,
+    final color = error
+        ? const Color(0xFFD45757)
+        : complete
+            ? brandGreen
+            : brandPurple;
+    final background = error
+        ? const Color(0xFFFFEDED)
+        : complete
+            ? const Color(0xFFE9F9F1)
+            : brandLavender;
+    final icon = error
+        ? Icons.error_outline_rounded
+        : complete
+            ? Icons.check_circle_outline_rounded
+            : searching
+                ? Icons.radar_rounded
+                : Icons.photo_library_outlined;
+    final label = error
+        ? 'PHOTO NEEDS ATTENTION'
+        : complete
+            ? 'SEARCH COMPLETE'
+            : searching
+                ? 'REMOTE SEARCH ACTIVE'
+                : 'READY TO REVIEW';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .6,
             ),
           ),
-          child: Icon(
-            complete ? Icons.check_rounded : icon,
-            color: highlighted ? brandPurple : brandMuted,
-            size: 17,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          label,
-          style: TextStyle(
-            color: highlighted ? brandInk : brandMuted,
-            fontSize: 9,
-            fontWeight: highlighted ? FontWeight.w800 : FontWeight.w600,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _ProcessLine extends StatelessWidget {
-  const _ProcessLine({required this.active});
+class _EditablePhotoCard extends StatelessWidget {
+  const _EditablePhotoCard({
+    super.key,
+    required this.photo,
+    required this.number,
+    required this.rejected,
+    required this.editable,
+    required this.onRemove,
+    required this.onReplace,
+  });
 
-  final bool active;
+  final MatchPhoto photo;
+  final int number;
+  final bool rejected;
+  final bool editable;
+  final VoidCallback onRemove;
+  final VoidCallback onReplace;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: 2,
-        margin: const EdgeInsets.fromLTRB(7, 0, 7, 19),
-        color: active ? brandPurple : brandBorder,
+    final borderColor = rejected ? const Color(0xFFD45757) : brandBorder;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: borderColor, width: rejected ? 2 : 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.memory(photo.bytes, fit: BoxFit.cover),
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: rejected
+                          ? const Color(0xFFD45757)
+                          : brandInk.withValues(alpha: .76),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      rejected ? 'PHOTO $number • CHECK' : 'PHOTO $number',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                if (editable)
+                  Positioned(
+                    right: 5,
+                    top: 5,
+                    child: IconButton(
+                      key: ValueKey('remove-photo-${number - 1}'),
+                      tooltip: 'Remove photo $number',
+                      onPressed: onRemove,
+                      style: IconButton.styleFrom(
+                        backgroundColor: brandInk.withValues(alpha: .74),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(34, 34),
+                        padding: const EdgeInsets.all(7),
+                      ),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    photo.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (editable)
+                  TextButton(
+                    key: ValueKey('replace-photo-${number - 1}'),
+                    onPressed: onReplace,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    child: const Text('Replace'),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptySelection extends StatelessWidget {
+  const _EmptySelection({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
+      decoration: BoxDecoration(
+        color: brandLavender,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: brandBorder),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.add_photo_alternate_outlined,
+            color: brandPurple,
+            size: 36,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Add at least one photo',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'You can add up to five clear photos of the same person.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: brandMuted, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            key: const ValueKey('add-photos-empty-button'),
+            onPressed: onAdd,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Add photos'),
+          ),
+        ],
       ),
     );
   }

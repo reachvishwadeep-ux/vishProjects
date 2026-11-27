@@ -9,6 +9,7 @@ from app.audit_service import (
     mask_phone,
     record_event,
     register_installation,
+    register_push_installation,
     require_audit_admin,
 )
 from app.auth import AuthPrincipal, require_principal
@@ -27,6 +28,7 @@ from app.schemas import (
     InstallationListResponse,
     InstallationOut,
     InstallationRequest,
+    PushRegistrationRequest,
 )
 
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
@@ -55,6 +57,23 @@ def bind_app_installation(
     principal: AuthPrincipal = Depends(require_principal),
 ) -> InstallationOut:
     installation = register_installation(db, request, account=principal.account)
+    return _installation_out(db, installation)
+
+
+@router.post(
+    "/installations/push",
+    response_model=InstallationOut,
+)
+def register_installation_push(
+    request: PushRegistrationRequest,
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> InstallationOut:
+    installation = register_push_installation(
+        db,
+        request,
+        account=principal.account,
+    )
     return _installation_out(db, installation)
 
 
@@ -189,5 +208,6 @@ def _installation_out(
         first_seen_at=installation.first_seen_at,
         last_seen_at=installation.last_seen_at,
         last_authenticated_at=installation.last_authenticated_at,
+        push_enabled=installation.push_enabled,
         is_active=installation.is_active,
     )

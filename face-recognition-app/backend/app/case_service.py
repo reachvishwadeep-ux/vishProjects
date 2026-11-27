@@ -11,10 +11,22 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.connection_service import ensure_connection_for_match
+from app.connection_service import (
+    MatchPushAlert,
+    ensure_connection_for_match,
+    send_match_push_alerts,
+)
 from app.face_engine import DetectedFace, get_engine
 from app.models import CaseAccount, CaseFace, CaseMatch, CaseRecord
-from app.schemas import CaseCandidate, CaseMatchesResponse, CaseSearchResult, CaseType
+from app.schemas import (
+    CaseCandidate,
+    CaseMatchesResponse,
+    CasePhotoOut,
+    CaseSearchResult,
+    CaseType,
+    OwnedCaseListResponse,
+    OwnedCaseOut,
+)
 from app.storage import get_store
 
 
@@ -25,6 +37,13 @@ class CaseHit:
     subject_label: str
     image_key: str
     score: float
+
+
+@dataclass(frozen=True)
+class CasePhoto:
+    image_bytes: bytes
+    face: DetectedFace
+    content_type: str = "image/jpeg"
 
 
 def opposite_case_type(case_type: CaseType) -> CaseType:
@@ -50,6 +69,33 @@ def create_case(
     content_type: str,
     account_id: uuid.UUID,
 ) -> tuple[CaseRecord, CaseFace]:
+    case, faces = create_case_with_faces(
+        db,
+        case_type=case_type,
+        subject_label=subject_label,
+        photos=[
+            CasePhoto(
+                image_bytes=image_bytes,
+                face=face,
+                content_type=content_type,
+            )
+        ],
+        account_id=account_id,
+    )
+    return case, faces[0]
+
+
+def create_case_with_faces(
+    db: Session,
+    *,
+    case_type: CaseType,
+    subject_label: str,
+    photos: list[CasePhoto],
+    account_id: uuid.UUID,
+) -> tuple[CaseRecord, list[CaseFace]]:
+    if not photos:
+        raise ValueError("at least one case photo is required")
+
     case = CaseRecord(
         case_type=case_type.value,
         subject_label=subject_label.strip() or "Photo submission",
@@ -60,24 +106,63 @@ def create_case(
     db.add(CaseAccount(case_id=case.id, account_id=account_id))
 
     store = get_store()
-    key = f"cases/{case.id}/{uuid.uuid4()}.jpg"
-    store.put(key, image_bytes, content_type=content_type)
-
-    case_face = CaseFace(
-        case_id=case.id,
-        case_type=case_type.value,
-        image_key=key,
-        bbox=list(face.bbox),
-        det_score=face.det_score,
-        quality=face.quality.score,
-        model_tag=get_engine().model_tag,
-        embedding=face.embedding.tolist(),
-    )
-    db.add(case_face)
+    case_faces: list[CaseFace] = []
+    for photo in photos:
+        key = f"cases/{case.id}/{uuid.uuid4()}.jpg"
+        store.put(key, photo.image_bytes, content_type=photo.content_type)
+        case_face = CaseFace(
+            case_id=case.id,
+            case_type=case_type.value,
+            image_key=key,
+            bbox=list(photo.face.bbox),
+            det_score=photo.face.det_score,
+            quality=photo.face.quality.score,
+            model_tag=get_engine().model_tag,
+            embedding=photo.face.embedding.tolist(),
+        )
+        db.add(case_face)
+        case_faces.append(case_face)
     db.commit()
     db.refresh(case)
-    db.refresh(case_face)
-    return case, case_face
+    for case_face in case_faces:
+        db.refresh(case_face)
+    return case, case_faces
+
+
+def combine_case_search_results(
+    results: list[CaseSearchResult],
+    *,
+    top_k: int,
+) -> CaseSearchResult:
+    if not results:
+        return CaseSearchResult(
+            decision="no_match",
+            threshold=get_settings().match_threshold,
+            results=[],
+        )
+
+    decision_rank = {"no_match": 0, "review": 1, "match": 2}
+    decision = max(
+        (result.decision for result in results),
+        key=lambda value: decision_rank.get(value, 0),
+    )
+    best_by_case: dict[uuid.UUID, CaseCandidate] = {}
+    for result in results:
+        for candidate in result.results:
+            existing = best_by_case.get(candidate.case_id)
+            if existing is None or candidate.score > existing.score:
+                best_by_case[candidate.case_id] = candidate
+
+    candidates = sorted(
+        best_by_case.values(),
+        key=lambda candidate: candidate.score,
+        reverse=True,
+    )[:top_k]
+    return CaseSearchResult(
+        decision=decision,
+        threshold=results[0].threshold,
+        results=candidates,
+    )
 
 
 def search_opposite_cases(
@@ -203,6 +288,70 @@ def list_case_matches(db: Session, case: CaseRecord) -> CaseMatchesResponse:
     return CaseMatchesResponse(case_id=case.id, results=results)
 
 
+def list_owned_cases(
+    db: Session,
+    *,
+    account_id: uuid.UUID,
+) -> OwnedCaseListResponse:
+    owned_case_ids = (
+        select(CaseAccount.case_id).where(CaseAccount.account_id == account_id).scalar_subquery()
+    )
+    cases = db.scalars(
+        select(CaseRecord)
+        .where(CaseRecord.id.in_(owned_case_ids))
+        .order_by(CaseRecord.created_at.desc())
+    ).all()
+    store = get_store()
+    results: list[OwnedCaseOut] = []
+    for case in cases:
+        matches = db.scalars(
+            select(CaseMatch)
+            .where(
+                or_(
+                    CaseMatch.missing_case_id == case.id,
+                    CaseMatch.found_case_id == case.id,
+                )
+            )
+            .order_by(CaseMatch.score.desc())
+        ).all()
+        photos = sorted(case.faces, key=lambda face: face.created_at)
+        my_image_url = None
+        other_image_url = None
+        if matches:
+            best_match = matches[0]
+            is_missing = best_match.missing_case_id == case.id
+            my_face_id = best_match.missing_face_id if is_missing else best_match.found_face_id
+            other_face_id = best_match.found_face_id if is_missing else best_match.missing_face_id
+            my_face = db.get(CaseFace, my_face_id)
+            other_face = db.get(CaseFace, other_face_id)
+            if my_face is not None and other_face is not None:
+                my_image_url = store.presigned_url(my_face.image_key)
+                other_image_url = store.presigned_url(other_face.image_key)
+        results.append(
+            OwnedCaseOut(
+                id=case.id,
+                case_type=CaseType(case.case_type),
+                subject_label=case.subject_label,
+                status=case.status,
+                created_at=case.created_at,
+                match_count=len(matches),
+                match_state="potential_match" if matches else "searching",
+                photos=[
+                    CasePhotoOut(
+                        id=face.id,
+                        image_url=store.presigned_url(face.image_key),
+                        quality=face.quality,
+                        created_at=face.created_at,
+                    )
+                    for face in photos
+                ],
+                my_image_url=my_image_url,
+                other_image_url=other_image_url,
+            )
+        )
+    return OwnedCaseListResponse(results=results)
+
+
 def delete_case(db: Session, case: CaseRecord) -> None:
     keys = [face.image_key for face in case.faces]
     db.delete(case)
@@ -220,6 +369,10 @@ def _persist_candidates(
 ) -> None:
     settings = get_settings()
     candidate_pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
+    push_alerts: dict[
+        tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+        MatchPushAlert,
+    ] = {}
     for hit in hits:
         if hit.score < settings.review_threshold:
             continue
@@ -266,8 +419,16 @@ def _persist_candidates(
             )
         )
         if match is not None:
-            ensure_connection_for_match(db, match, source=source)
+            for alert in ensure_connection_for_match(db, match, source=source):
+                push_alerts[
+                    (
+                        alert.connection_id,
+                        alert.account_id,
+                        alert.installation_id,
+                    )
+                ] = alert
     db.commit()
+    send_match_push_alerts(db, list(push_alerts.values()))
 
 
 def _to_vector_literal(embedding: np.ndarray) -> str:

@@ -61,6 +61,7 @@ class CaseCandidate(BaseModel):
     subject_label: str
     score: float
     image_url: str | None = None
+    connection_id: uuid.UUID | None = None
 
 
 class CaseSearchResult(BaseModel):
@@ -73,7 +74,9 @@ class CaseSubmissionResponse(BaseModel):
     case_id: uuid.UUID
     case_type: CaseType
     subject_label: str
+    photo_count: int
     quality: QualityReport
+    qualities: list[QualityReport]
     match: CaseSearchResult
 
 
@@ -83,6 +86,25 @@ class CaseOut(BaseModel):
     subject_label: str
     status: str
     created_at: datetime
+
+
+class CasePhotoOut(BaseModel):
+    id: uuid.UUID
+    image_url: str
+    quality: float | None
+    created_at: datetime
+
+
+class OwnedCaseOut(CaseOut):
+    match_count: int
+    match_state: str
+    photos: list[CasePhotoOut]
+    my_image_url: str | None = None
+    other_image_url: str | None = None
+
+
+class OwnedCaseListResponse(BaseModel):
+    results: list[OwnedCaseOut]
 
 
 class CaseMatchesResponse(BaseModel):
@@ -104,8 +126,13 @@ class ConnectionOut(BaseModel):
     other_subject_label: str
     score: float
     image_url: str | None = None
+    my_image_url: str | None = None
+    other_image_url: str | None = None
     my_consented: bool
     other_consented: bool
+    my_contact_sharing_consented: bool = False
+    other_contact_sharing_consented: bool = False
+    other_phone_number: str | None = None
     my_verified_peer: bool
     other_verified_peer: bool
     unread: bool
@@ -116,6 +143,32 @@ class ConnectionOut(BaseModel):
 
 class ConnectionListResponse(BaseModel):
     results: list[ConnectionOut]
+
+
+class MatchHistoryRole(StrEnum):
+    missing = "missing"
+    found = "found"
+    both = "both"
+
+
+class MatchHistoryOut(BaseModel):
+    id: uuid.UUID
+    role: MatchHistoryRole
+    missing_case_id: uuid.UUID
+    found_case_id: uuid.UUID
+    missing_subject_label: str
+    found_subject_label: str
+    score: float
+    decision: str
+    image_url: str | None = None
+    same_account: bool
+    connection_id: uuid.UUID | None = None
+    connection_status: str | None = None
+    created_at: datetime
+
+
+class MatchHistoryListResponse(BaseModel):
+    results: list[MatchHistoryOut]
 
 
 class MeetingCodeVerifyRequest(BaseModel):
@@ -136,6 +189,7 @@ class OtpVerifyRequest(BaseModel):
     challenge_id: uuid.UUID
     phone_number: str
     code: str
+    contact_sharing_consent: bool = False
 
 
 class RefreshRequest(BaseModel):
@@ -145,6 +199,7 @@ class RefreshRequest(BaseModel):
 class AccountOut(BaseModel):
     id: uuid.UUID
     phone_number: str
+    contact_sharing_consented: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -167,6 +222,12 @@ class InstallationRequest(BaseModel):
     build_number: str = Field(min_length=1, max_length=32)
 
 
+class PushRegistrationRequest(BaseModel):
+    installation_id: uuid.UUID
+    fid: str | None = Field(default=None, min_length=20, max_length=255)
+    enabled: bool
+
+
 class InstallationOut(BaseModel):
     installation_id: uuid.UUID
     account_id: uuid.UUID | None
@@ -177,6 +238,7 @@ class InstallationOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     last_authenticated_at: datetime | None
+    push_enabled: bool
     is_active: bool
 
 

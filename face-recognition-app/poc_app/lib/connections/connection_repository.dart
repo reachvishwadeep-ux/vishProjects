@@ -12,34 +12,35 @@ class MatchConnection {
     required this.score,
     required this.myConsented,
     required this.otherConsented,
-    required this.myVerifiedPeer,
-    required this.otherVerifiedPeer,
+    required this.myContactSharingConsented,
+    required this.otherContactSharingConsented,
     required this.unread,
     required this.createdAt,
     this.imageUrl,
-    this.meetingCode,
-    this.meetingCodeExpiresAt,
+    this.myImageUrl,
+    this.otherImageUrl,
+    this.otherPhoneNumber,
   });
 
   factory MatchConnection.fromJson(Map<String, Object?> json) {
+    final legacyImageUrl = json['image_url'] as String?;
     return MatchConnection(
       id: json['id']! as String,
       role: json['role']! as String,
       status: json['status']! as String,
       otherSubjectLabel: json['other_subject_label']! as String,
       score: (json['score']! as num).toDouble(),
-      imageUrl: json['image_url'] as String?,
+      imageUrl: legacyImageUrl,
+      myImageUrl: json['my_image_url'] as String?,
+      otherImageUrl: json['other_image_url'] as String? ?? legacyImageUrl,
       myConsented: json['my_consented']! as bool,
       otherConsented: json['other_consented']! as bool,
-      myVerifiedPeer: json['my_verified_peer']! as bool,
-      otherVerifiedPeer: json['other_verified_peer']! as bool,
+      myContactSharingConsented:
+          json['my_contact_sharing_consented'] as bool? ?? false,
+      otherContactSharingConsented:
+          json['other_contact_sharing_consented'] as bool? ?? false,
+      otherPhoneNumber: json['other_phone_number'] as String?,
       unread: json['unread']! as bool,
-      meetingCode: json['meeting_code'] as String?,
-      meetingCodeExpiresAt: json['meeting_code_expires_at'] == null
-          ? null
-          : DateTime.parse(
-              json['meeting_code_expires_at']! as String,
-            ).toLocal(),
       createdAt: DateTime.parse(json['created_at']! as String).toLocal(),
     );
   }
@@ -50,13 +51,64 @@ class MatchConnection {
   final String otherSubjectLabel;
   final double score;
   final String? imageUrl;
+  final String? myImageUrl;
+  final String? otherImageUrl;
   final bool myConsented;
   final bool otherConsented;
-  final bool myVerifiedPeer;
-  final bool otherVerifiedPeer;
+  final bool myContactSharingConsented;
+  final bool otherContactSharingConsented;
+  final String? otherPhoneNumber;
   final bool unread;
-  final String? meetingCode;
-  final DateTime? meetingCodeExpiresAt;
+  final DateTime createdAt;
+}
+
+class MatchHistoryEntry {
+  const MatchHistoryEntry({
+    required this.id,
+    required this.role,
+    required this.missingCaseId,
+    required this.foundCaseId,
+    required this.missingSubjectLabel,
+    required this.foundSubjectLabel,
+    required this.score,
+    required this.decision,
+    required this.sameAccount,
+    required this.createdAt,
+    this.imageUrl,
+    this.connectionId,
+    this.connectionStatus,
+  });
+
+  factory MatchHistoryEntry.fromJson(Map<String, Object?> json) {
+    return MatchHistoryEntry(
+      id: json['id']! as String,
+      role: json['role']! as String,
+      missingCaseId: json['missing_case_id']! as String,
+      foundCaseId: json['found_case_id']! as String,
+      missingSubjectLabel: json['missing_subject_label']! as String,
+      foundSubjectLabel: json['found_subject_label']! as String,
+      score: (json['score']! as num).toDouble(),
+      decision: json['decision']! as String,
+      imageUrl: json['image_url'] as String?,
+      sameAccount: json['same_account']! as bool,
+      connectionId: json['connection_id'] as String?,
+      connectionStatus: json['connection_status'] as String?,
+      createdAt: DateTime.parse(json['created_at']! as String).toLocal(),
+    );
+  }
+
+  final String id;
+  final String role;
+  final String missingCaseId;
+  final String foundCaseId;
+  final String missingSubjectLabel;
+  final String foundSubjectLabel;
+  final double score;
+  final String decision;
+  final String? imageUrl;
+  final bool sameAccount;
+  final String? connectionId;
+  final String? connectionStatus;
   final DateTime createdAt;
 }
 
@@ -85,6 +137,18 @@ class ConnectionRepository {
         .toList();
   }
 
+  Future<List<MatchHistoryEntry>> listMatches() async {
+    final payload = await _request('GET', '/v1/connections/matches');
+    final results = payload['results']! as List<Object?>;
+    return results
+        .map(
+          (value) => MatchHistoryEntry.fromJson(
+            value! as Map<String, Object?>,
+          ),
+        )
+        .toList();
+  }
+
   Future<MatchConnection> markRead(String connectionId) =>
       _action('/v1/connections/$connectionId/read');
 
@@ -93,21 +157,6 @@ class ConnectionRepository {
 
   Future<MatchConnection> withdrawConsent(String connectionId) =>
       _action('/v1/connections/$connectionId/withdraw-consent');
-
-  Future<MatchConnection> renewMeetingCode(String connectionId) =>
-      _action('/v1/connections/$connectionId/meeting-code/renew');
-
-  Future<MatchConnection> verifyMeetingCode(
-    String connectionId,
-    String code,
-  ) async {
-    final payload = await _request(
-      'POST',
-      '/v1/connections/$connectionId/meeting-code/verify',
-      body: {'code': code},
-    );
-    return MatchConnection.fromJson(payload);
-  }
 
   Future<MatchConnection> _action(String path) async {
     final payload = await _request('POST', path);

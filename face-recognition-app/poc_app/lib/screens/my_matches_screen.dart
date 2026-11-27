@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../connections/connection_repository.dart';
 import '../theme.dart';
+import '../widgets/matched_photo_pair.dart';
 
 class MyMatchesScreen extends StatefulWidget {
   const MyMatchesScreen({super.key, this.repository});
@@ -14,6 +15,7 @@ class MyMatchesScreen extends StatefulWidget {
 
 class _MyMatchesScreenState extends State<MyMatchesScreen> {
   List<MatchConnection> _connections = const [];
+  List<MatchHistoryEntry> _matches = const [];
   String? _error;
   var _loading = true;
 
@@ -29,6 +31,7 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
       setState(() {
         _loading = false;
         _connections = const [];
+        _matches = const [];
       });
       return;
     }
@@ -38,8 +41,12 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
     });
     try {
       final connections = await repository.list();
+      final matches = await repository.listMatches();
       if (!mounted) return;
-      setState(() => _connections = connections);
+      setState(() {
+        _connections = connections;
+        _matches = matches;
+      });
     } on ConnectionException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -63,6 +70,9 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
   Widget build(BuildContext context) {
     final unreadCount =
         _connections.where((connection) => connection.unread).length;
+    final historyOnly = _matches
+        .where((match) => match.connectionId == null)
+        .toList(growable: false);
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _load,
@@ -89,7 +99,7 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                       const SizedBox(height: 4),
                       Text(
                         unreadCount == 0
-                            ? 'Private match and consent updates'
+                            ? 'Potential matches and private connections'
                             : '$unreadCount new connection update'
                                 '${unreadCount == 1 ? '' : 's'}',
                         style: const TextStyle(color: brandMuted),
@@ -124,27 +134,145 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                 actionLabel: 'Try again',
                 onAction: _load,
               )
-            else if (_connections.isEmpty)
+            else if (_connections.isEmpty && historyOnly.isEmpty)
               const _StateCard(
                 icon: Icons.manage_search_rounded,
-                title: 'No connections yet',
+                title: 'No matches yet',
                 message:
-                    'MatchSnap will keep comparing missing and found cases. '
-                    'A private update will appear here when a candidate match '
-                    'is found.',
+                    'ReuniteNow will keep comparing missing and found cases. '
+                    'Potential match results and secure cross-account '
+                    'connections will appear here.',
               )
-            else
-              ..._connections.map(
-                (connection) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _ConnectionCard(
-                    connection: connection,
-                    repository: widget.repository!,
-                    onChanged: _replace,
+            else ...[
+              if (_connections.isNotEmpty) ...[
+                const _SectionHeading(
+                  title: 'Secure connections',
+                  message:
+                      'Cross-account photo matches with verified phone contact '
+                      'for the matched seeker and finder.',
+                ),
+                const SizedBox(height: 12),
+                ..._connections.map(
+                  (connection) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _ConnectionCard(
+                      connection: connection,
+                      repository: widget.repository!,
+                      onChanged: _replace,
+                    ),
                   ),
                 ),
-              ),
+              ],
+              if (historyOnly.isNotEmpty) ...[
+                const _SectionHeading(
+                  title: 'Potential match history',
+                  message: 'Current and previous visual comparisons, including '
+                      'matches between your own cases.',
+                ),
+                const SizedBox(height: 12),
+                ...historyOnly.map(
+                  (match) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _MatchHistoryCard(match: match),
+                  ),
+                ),
+              ],
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ConnectionDetailScreen extends StatefulWidget {
+  const ConnectionDetailScreen({
+    super.key,
+    required this.repository,
+    required this.connectionId,
+  });
+
+  final ConnectionRepository repository;
+  final String connectionId;
+
+  @override
+  State<ConnectionDetailScreen> createState() => _ConnectionDetailScreenState();
+}
+
+class _ConnectionDetailScreenState extends State<ConnectionDetailScreen> {
+  MatchConnection? _connection;
+  String? _error;
+  var _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final connections = await widget.repository.list();
+      if (!mounted) return;
+      final matches =
+          connections.where((item) => item.id == widget.connectionId);
+      setState(() => _connection = matches.isEmpty ? null : matches.first);
+    } on ConnectionException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final connection = _connection;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Secure connection')),
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+            children: [
+              const _PrivacyBanner(),
+              const SizedBox(height: 18),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 50),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                _StateCard(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Could not load this connection',
+                  message: _error!,
+                  actionLabel: 'Try again',
+                  onAction: _load,
+                )
+              else if (connection == null)
+                const _StateCard(
+                  icon: Icons.manage_search_rounded,
+                  title: 'Connection not available',
+                  message:
+                      'This connection is no longer available. Check My Matches '
+                      'for current updates.',
+                )
+              else
+                _ConnectionCard(
+                  connection: connection,
+                  repository: widget.repository,
+                  onChanged: (updated) => setState(() => _connection = updated),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -188,8 +316,9 @@ class _PrivacyBanner extends StatelessWidget {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Phone numbers and precise locations are never shown. '
-                  'Both parties must consent before meeting codes appear.',
+                  'Your verified phone number is shared only with a matched '
+                  'seeker or finder after both accounts accept the disclosure. '
+                  'Precise locations stay private.',
                   style: TextStyle(
                     color: Color(0xE6FFFFFF),
                     fontSize: 12,
@@ -200,6 +329,142 @@ class _PrivacyBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: brandInk,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          message,
+          style: const TextStyle(
+            color: brandMuted,
+            fontSize: 11,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MatchHistoryCard extends StatelessWidget {
+  const _MatchHistoryCard({required this.match});
+
+  final MatchHistoryEntry match;
+
+  String get _ownershipLabel {
+    if (match.sameAccount) {
+      return 'Both cases are yours · no private connection is created';
+    }
+    if (match.role == 'missing') {
+      return 'Your missing-person case';
+    }
+    if (match.role == 'found') {
+      return 'Your found-person case';
+    }
+    return 'Your cases';
+  }
+
+  String get _dateLabel {
+    final value = match.createdAt;
+    return '${value.month}/${value.day}/${value.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final percentage = (match.score * 100).round();
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 25,
+                  backgroundColor: brandLavender,
+                  backgroundImage: match.imageUrl == null
+                      ? null
+                      : NetworkImage(match.imageUrl!),
+                  child: match.imageUrl == null
+                      ? const Icon(Icons.person_search_rounded)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${match.missingSubjectLabel} ↔ '
+                        '${match.foundSubjectLabel}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$percentage% visual similarity · matched $_dateLabel',
+                        style: const TextStyle(
+                          color: brandMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const _StatusPill(
+                  label: 'HISTORY',
+                  color: brandPurple,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _InlineNotice(
+              icon: match.sameAccount
+                  ? Icons.inventory_2_outlined
+                  : Icons.manage_search_rounded,
+              text: _ownershipLabel,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Similarity is review evidence only—not proof of identity, '
+              'guardianship, custody, or a safe handoff.',
+              style: TextStyle(
+                color: brandMuted,
+                fontSize: 10.5,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -221,15 +486,8 @@ class _ConnectionCard extends StatefulWidget {
 }
 
 class _ConnectionCardState extends State<_ConnectionCard> {
-  final _codeController = TextEditingController();
   String? _error;
   var _busy = false;
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    super.dispose();
-  }
 
   Future<void> _act(
     Future<MatchConnection> Function() action,
@@ -243,7 +501,6 @@ class _ConnectionCardState extends State<_ConnectionCard> {
       final connection = await action();
       widget.onChanged(connection);
       if (!mounted) return;
-      _codeController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(successMessage)),
       );
@@ -315,62 +572,29 @@ class _ConnectionCardState extends State<_ConnectionCard> {
               ],
             ),
             const SizedBox(height: 14),
-            _ConsentProgress(connection: connection),
+            MatchedPhotoPair(
+              role: connection.role,
+              myImageUrl: connection.myImageUrl,
+              otherImageUrl: connection.otherImageUrl,
+            ),
             const SizedBox(height: 14),
-            if (!connection.myConsented)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () => _act(
-                            () => widget.repository.consent(connection.id),
-                            'Your consent was recorded.',
-                          ),
-                  icon: const Icon(Icons.handshake_outlined, size: 19),
-                  label: const Text('Consent to a safe meeting'),
-                ),
-              )
-            else if (!connection.otherConsented)
+            _ContactSharingProgress(connection: connection),
+            const SizedBox(height: 14),
+            if (connection.otherPhoneNumber != null)
+              _PhoneContactCard(phoneNumber: connection.otherPhoneNumber!)
+            else if (!connection.otherContactSharingConsented)
               const _InlineNotice(
                 icon: Icons.hourglass_top_rounded,
-                text: 'Waiting for the other party to consent.',
+                text: 'The other party has not accepted phone-number sharing '
+                    'yet. Their number will appear here after they update the '
+                    'app and agree.',
               )
             else
-              _MeetingCodePanel(
-                connection: connection,
-                codeController: _codeController,
-                busy: _busy,
-                onVerify: () => _act(
-                  () => widget.repository.verifyMeetingCode(
-                    connection.id,
-                    _codeController.text,
-                  ),
-                  'The other party’s code was verified.',
-                ),
-                onRenew: () => _act(
-                  () => widget.repository.renewMeetingCode(connection.id),
-                  'New meeting codes are ready.',
-                ),
+              const _InlineNotice(
+                icon: Icons.sync_problem_rounded,
+                text: 'Phone contact is temporarily unavailable. Refresh this '
+                    'match or try again later.',
               ),
-            if (connection.myConsented) ...[
-              const SizedBox(height: 5),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () => _act(
-                            () => widget.repository.withdrawConsent(
-                              connection.id,
-                            ),
-                            'Your consent was withdrawn and codes were revoked.',
-                          ),
-                  icon: const Icon(Icons.block_rounded, size: 16),
-                  label: const Text('Withdraw consent'),
-                ),
-              ),
-            ],
             if (connection.unread) ...[
               const SizedBox(height: 9),
               Align(
@@ -399,10 +623,9 @@ class _ConnectionCardState extends State<_ConnectionCard> {
             ],
             const SizedBox(height: 12),
             const Text(
-              'Face similarity is only a candidate signal. Meeting codes '
-              'confirm account presence—not identity, guardianship, custody, '
-              'or a safe child handoff. Never transfer a child based on the '
-              'app alone.',
+              'Face similarity and phone sharing do not prove identity, '
+              'guardianship, custody, or a safe child handoff. Never transfer '
+              'a child based on the app alone.',
               style: TextStyle(
                 color: brandMuted,
                 fontSize: 10.5,
@@ -416,8 +639,73 @@ class _ConnectionCardState extends State<_ConnectionCard> {
   }
 }
 
-class _ConsentProgress extends StatelessWidget {
-  const _ConsentProgress({required this.connection});
+class _PhoneContactCard extends StatelessWidget {
+  const _PhoneContactCard({required this.phoneNumber});
+
+  final String phoneNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: brandGreen.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: brandGreen.withValues(alpha: .24)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 20,
+            backgroundColor: brandGreen,
+            child: Icon(
+              Icons.phone_in_talk_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'MATCHED CONTACT',
+                  style: TextStyle(
+                    color: brandGreen,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SelectableText(
+                  phoneNumber,
+                  style: const TextStyle(
+                    color: brandInk,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Call or message using your phone.',
+                  style: TextStyle(
+                    color: brandMuted,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactSharingProgress extends StatelessWidget {
+  const _ContactSharingProgress({required this.connection});
 
   final MatchConnection connection;
 
@@ -428,16 +716,20 @@ class _ConsentProgress extends StatelessWidget {
         Expanded(
           child: _ProgressItem(
             label: 'YOU',
-            complete: connection.myConsented,
-            text: connection.myConsented ? 'Consented' : 'Consent needed',
+            complete: connection.myContactSharingConsented,
+            text: connection.myContactSharingConsented
+                ? 'Sharing accepted'
+                : 'Consent needed',
           ),
         ),
         Container(width: 18, height: 2, color: brandBorder),
         Expanded(
           child: _ProgressItem(
             label: 'OTHER PARTY',
-            complete: connection.otherConsented,
-            text: connection.otherConsented ? 'Consented' : 'Waiting',
+            complete: connection.otherContactSharingConsented,
+            text: connection.otherContactSharingConsented
+                ? 'Sharing accepted'
+                : 'Waiting',
           ),
         ),
       ],
@@ -497,138 +789,18 @@ class _ProgressItem extends StatelessWidget {
   }
 }
 
-class _MeetingCodePanel extends StatelessWidget {
-  const _MeetingCodePanel({
-    required this.connection,
-    required this.codeController,
-    required this.busy,
-    required this.onVerify,
-    required this.onRenew,
-  });
-
-  final MatchConnection connection;
-  final TextEditingController codeController;
-  final bool busy;
-  final VoidCallback onVerify;
-  final VoidCallback onRenew;
-
-  @override
-  Widget build(BuildContext context) {
-    if (connection.status == 'verified') {
-      return const _InlineNotice(
-        icon: Icons.verified_user_rounded,
-        text: 'Both parties verified each other’s one-time meeting code.',
-        success: true,
-      );
-    }
-    final code = connection.meetingCode;
-    final expiresAt = connection.meetingCodeExpiresAt;
-    final activeCodeWasConsumed = code == null &&
-        connection.otherVerifiedPeer &&
-        expiresAt != null &&
-        expiresAt.isAfter(DateTime.now());
-    if (code == null && !activeCodeWasConsumed) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _InlineNotice(
-            icon: Icons.timer_off_outlined,
-            text: 'The meeting codes expired or were already used.',
-          ),
-          const SizedBox(height: 9),
-          OutlinedButton.icon(
-            onPressed: busy ? null : onRenew,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Create new meeting codes'),
-          ),
-        ],
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: brandLavender,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (code != null) ...[
-            const Text(
-              'YOUR ONE-TIME CODE',
-              style: TextStyle(
-                color: brandPurple,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .6,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              code,
-              style: const TextStyle(
-                color: brandInk,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 7,
-              ),
-            ),
-            Text(
-              _expiryText(expiresAt),
-              style: const TextStyle(color: brandMuted, fontSize: 10),
-            ),
-          ] else ...[
-            const _InlineNotice(
-              icon: Icons.verified_outlined,
-              text:
-                  'The other party verified your code. Enter their code to complete verification.',
-              success: true,
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: codeController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            decoration: const InputDecoration(
-              labelText: 'Other party’s code',
-              hintText: '000000',
-              counterText: '',
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.tonalIcon(
-              onPressed: busy || connection.myVerifiedPeer ? null : onVerify,
-              icon: const Icon(Icons.key_rounded),
-              label: Text(
-                connection.myVerifiedPeer
-                    ? 'Other code verified'
-                    : 'Verify other code',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _InlineNotice extends StatelessWidget {
   const _InlineNotice({
     required this.icon,
     required this.text,
-    this.success = false,
   });
 
   final IconData icon;
   final String text;
-  final bool success;
 
   @override
   Widget build(BuildContext context) {
-    final color = success ? brandGreen : brandPurple;
+    const color = brandPurple;
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
@@ -734,24 +906,14 @@ class _StateCard extends StatelessWidget {
 
 String _statusLabel(String status) {
   return switch (status) {
-    'ready_to_meet' => 'CODES READY',
-    'verified' => 'VERIFIED',
+    'connected' || 'ready_to_meet' || 'verified' => 'CONNECTED',
     _ => 'CONSENT',
   };
 }
 
 Color _statusColor(String status) {
   return switch (status) {
-    'verified' => brandGreen,
-    'ready_to_meet' => brandPurple,
+    'connected' || 'ready_to_meet' || 'verified' => brandGreen,
     _ => brandMuted,
   };
-}
-
-String _expiryText(DateTime? expiresAt) {
-  if (expiresAt == null) return 'Short-lived code';
-  final remaining = expiresAt.difference(DateTime.now());
-  if (remaining.isNegative) return 'Expired';
-  final minutes = remaining.inMinutes + 1;
-  return 'Expires in about $minutes minute${minutes == 1 ? '' : 's'}';
 }

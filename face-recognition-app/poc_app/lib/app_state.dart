@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'connections/connection_repository.dart';
 import 'matching/matcher.dart';
 import 'models.dart';
 import 'repository/gallery_repository.dart';
@@ -11,10 +12,12 @@ class AppState extends ChangeNotifier {
   AppState({
     required this.repository,
     required this.matcher,
+    this.connections,
   });
 
   final GalleryRepository repository;
   final Matcher matcher;
+  final ConnectionRepository? connections;
 
   List<StoredImage> _gallery = [];
   bool _initialized = false;
@@ -99,6 +102,25 @@ class AppState extends ChangeNotifier {
         gallery: _gallery,
         caseType: caseType,
         fileName: fileName,
+      );
+    } finally {
+      _matching = false;
+      notifyListeners();
+    }
+  }
+
+  Future<MatchOutcome> comparePhotos(
+    List<MatchPhoto> photos, {
+    required CaseType caseType,
+  }) async {
+    await initialize();
+    _matching = true;
+    notifyListeners();
+    try {
+      return await matcher.matchPhotos(
+        photos: photos,
+        gallery: _gallery,
+        caseType: caseType,
       );
     } finally {
       _matching = false;

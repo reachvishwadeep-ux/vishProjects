@@ -84,7 +84,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Your MatchSnap profile',
+                  'Your ReuniteNow profile',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -94,7 +94,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 7),
                 Text(
-                  'Control what is shared after a future match.',
+                  'Your verified number can connect you after a photo match.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .76),
@@ -126,7 +126,7 @@ class ProfileScreen extends StatelessWidget {
                   const _ProfileSetting(
                     icon: Icons.mail_outline_rounded,
                     title: 'Email address',
-                    subtitle: 'Not required for your MatchSnap account',
+                    subtitle: 'Not required for your ReuniteNow account',
                     value: 'Off',
                   ),
                   const Divider(height: 1, indent: 54),
@@ -134,7 +134,9 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.phone_outlined,
                     title: 'Phone number',
                     subtitle: auth?.account?.phoneNumber ?? 'Not signed in',
-                    value: auth?.authenticated == true ? 'Verified' : 'Off',
+                    value: auth?.contactSharingConsented == true
+                        ? 'Match sharing on'
+                        : 'Off',
                   ),
                   const Divider(height: 1, indent: 54),
                   const _ProfileSetting(
@@ -185,7 +187,8 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'These controls preview the future experience and are not connected yet.',
+                        'Your verified number is shown only to a matched seeker '
+                        'or finder who has accepted the same disclosure.',
                         style: TextStyle(
                           color: brandMuted,
                           fontSize: 11,

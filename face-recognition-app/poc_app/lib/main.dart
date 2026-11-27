@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:phone_form_field/phone_form_field.dart';
 
 import 'app_state.dart';
 import 'audit/installation_repository.dart';
@@ -9,12 +12,15 @@ import 'auth/auth_repository.dart';
 import 'config.dart';
 import 'connections/connection_repository.dart';
 import 'matching/remote_matcher.dart';
+import 'notifications/push_notification_controller.dart';
+import 'repository/case_repository.dart';
 import 'repository/gallery_repository.dart';
 import 'screens/phone_auth_screen.dart';
+import 'screens/contact_sharing_consent_screen.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final authRepository = AuthRepository(baseUrl: Config.apiBaseUrl);
   final auth = AuthController(repository: authRepository);
@@ -29,13 +35,33 @@ void main() {
     tokenProvider: authRepository.validAccessToken,
     onAuthenticationFailure: auth.logout,
   );
+  final cases = CaseRepository(
+    baseUrl: Config.apiBaseUrl,
+    tokenProvider: authRepository.validAccessToken,
+    onAuthenticationFailure: auth.logout,
+  );
+  PushNotificationController? pushNotifications;
+  if (Platform.isIOS || Platform.isAndroid) {
+    try {
+      await Firebase.initializeApp();
+      pushNotifications = PushNotificationController(
+        installations: installations,
+      );
+      await pushNotifications.start();
+    } on Object {
+      // Missing or unavailable Firebase configuration must not block the app.
+    }
+  }
   runApp(
     PocApp(
       auth: auth,
+      cases: cases,
       connections: connections,
       installations: installations,
+      pushNotifications: pushNotifications,
       state: AppState(
         repository: GalleryRepository(),
+        connections: connections,
         matcher: RemoteMatcher(
           baseUrl: Config.apiBaseUrl,
           tokenProvider: authRepository.validAccessToken,
@@ -52,14 +78,18 @@ class PocApp extends StatefulWidget {
     super.key,
     required this.state,
     this.auth,
+    this.cases,
     this.connections,
     this.installations,
+    this.pushNotifications,
   });
 
   final AppState state;
   final AuthController? auth;
+  final CaseRepository? cases;
   final ConnectionRepository? connections;
   final InstallationRepository? installations;
+  final PushNotificationController? pushNotifications;
 
   @override
   State<PocApp> createState() => _PocAppState();
@@ -74,12 +104,14 @@ class _PocAppState extends State<PocApp> {
     widget.state.initialize();
     widget.auth?.initialize();
     widget.auth?.addListener(_handleAuthenticationChange);
+    widget.pushNotifications?.addListener(_handlePushNotification);
     unawaited(_registerInstallation());
   }
 
   @override
   void dispose() {
     widget.auth?.removeListener(_handleAuthenticationChange);
+    widget.pushNotifications?.removeListener(_handlePushNotification);
     super.dispose();
   }
 
@@ -108,20 +140,31 @@ class _PocAppState extends State<PocApp> {
   Future<void> _bindInstallation() async {
     try {
       await widget.installations?.bind();
+      await widget.pushNotifications?.registerForAuthenticatedAccount();
     } on Object {
       // The next authenticated app launch retries this association.
     }
   }
 
+  void _handlePushNotification() {
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MatchSnap',
+      title: 'ReuniteNow',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: PhoneFieldLocalization.delegates,
+      supportedLocales: const [Locale('en')],
       theme: buildTheme(Brightness.light),
       themeMode: ThemeMode.light,
       home: widget.auth == null
-          ? AppShell(state: widget.state, connections: widget.connections)
+          ? AppShell(
+              state: widget.state,
+              cases: widget.cases,
+              connections: widget.connections,
+            )
           : AnimatedBuilder(
               animation: widget.auth!,
               builder: (context, _) {
@@ -133,10 +176,17 @@ class _PocAppState extends State<PocApp> {
                 if (!widget.auth!.authenticated) {
                   return PhoneAuthScreen(controller: widget.auth!);
                 }
+                if (!widget.auth!.contactSharingConsented) {
+                  return ContactSharingConsentScreen(
+                    controller: widget.auth!,
+                  );
+                }
                 return AppShell(
                   state: widget.state,
                   auth: widget.auth,
+                  cases: widget.cases,
                   connections: widget.connections,
+                  pushNotifications: widget.pushNotifications,
                 );
               },
             ),

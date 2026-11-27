@@ -7,6 +7,7 @@ from app.auth import AuthPrincipal, require_principal
 from app.connection_service import (
     consent_to_connection,
     list_connections,
+    list_match_history,
     mark_connection_read,
     renew_meeting_codes,
     verify_peer_meeting_code,
@@ -16,6 +17,7 @@ from app.db import get_db
 from app.schemas import (
     ConnectionListResponse,
     ConnectionOut,
+    MatchHistoryListResponse,
     MeetingCodeVerifyRequest,
 )
 
@@ -28,6 +30,14 @@ def connections(
     principal: AuthPrincipal = Depends(require_principal),
 ) -> ConnectionListResponse:
     return list_connections(db, principal.account)
+
+
+@router.get("/matches", response_model=MatchHistoryListResponse)
+def match_history(
+    db: Session = Depends(get_db),
+    principal: AuthPrincipal = Depends(require_principal),
+) -> MatchHistoryListResponse:
+    return list_match_history(db, principal.account)
 
 
 @router.post("/{connection_id}/read", response_model=ConnectionOut)

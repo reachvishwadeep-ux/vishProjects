@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:poc_app/matching/matcher.dart';
 import 'package:poc_app/matching/remote_matcher.dart';
 import 'package:poc_app/models.dart';
 
@@ -45,6 +46,7 @@ void main() {
                 'subject_label': 'Missing person submission',
                 'score': 0.88,
                 'image_url': 'https://images.example.com/candidate.jpg',
+                'connection_id': '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
               },
             ],
           },
@@ -74,6 +76,10 @@ void main() {
     expect(
       outcome.best!.image.remoteUrl,
       'https://images.example.com/candidate.jpg',
+    );
+    expect(
+      outcome.best!.connectionId,
+      '0d43113f-40b4-4444-a6eb-c29a77b79d2a',
     );
   });
 
@@ -106,6 +112,111 @@ void main() {
           (error) => error.message,
           'message',
           'face too small, image too blurry',
+        ),
+      ),
+    );
+  });
+
+  test('uploads up to five photos as one remote case', () async {
+    final client = MockClient((request) async {
+      expect(request.body, contains('name="images"'));
+      expect(request.body, contains('filename="front.jpg"'));
+      expect(request.body, contains('filename="profile.jpg"'));
+      return http.Response(
+        jsonEncode({
+          'case_id': '79ed0d79-6341-4fee-9155-5942e90c531f',
+          'case_type': 'missing',
+          'subject_label': 'Missing person submission',
+          'photo_count': 2,
+          'quality': {
+            'face_pixels': 160,
+            'det_score': 0.99,
+            'blur_variance': 140,
+            'yaw_degrees': 2,
+            'score': 0.93,
+            'passed': true,
+            'reasons': <String>[],
+          },
+          'qualities': <Object?>[],
+          'match': {
+            'decision': 'review',
+            'threshold': 0.42,
+            'results': <Object?>[],
+          },
+        }),
+        201,
+      );
+    });
+    final matcher = RemoteMatcher(
+      baseUrl: 'https://api.example.com',
+      client: client,
+    );
+
+    final outcome = await matcher.matchPhotos(
+      photos: [
+        MatchPhoto(
+          bytes: Uint8List.fromList([1, 2, 3]),
+          fileName: 'front.jpg',
+        ),
+        MatchPhoto(
+          bytes: Uint8List.fromList([4, 5, 6]),
+          fileName: 'profile.jpg',
+        ),
+      ],
+      gallery: const [],
+      caseType: CaseType.missing,
+    );
+
+    expect(outcome.decision, Decision.review);
+  });
+
+  test('surfaces the rejected photo position and guidance', () async {
+    final matcher = RemoteMatcher(
+      baseUrl: 'https://api.example.com',
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'detail': {
+              'error': 'Photo 2 contains more than one person.',
+              'photo_index': 2,
+              'reasons': [
+                'Choose a photo showing only the person for this case.',
+              ],
+            },
+          }),
+          422,
+        ),
+      ),
+    );
+
+    await expectLater(
+      matcher.matchPhotos(
+        photos: [
+          MatchPhoto(
+            bytes: Uint8List.fromList([1, 2, 3]),
+            fileName: 'front.jpg',
+          ),
+          MatchPhoto(
+            bytes: Uint8List.fromList([4, 5, 6]),
+            fileName: 'group.jpg',
+          ),
+        ],
+        gallery: const [],
+        caseType: CaseType.found,
+      ),
+      throwsA(
+        isA<RemoteRecognitionException>()
+            .having(
+              (error) => error.message,
+              'message',
+              'Photo 2 contains more than one person. '
+                  'Choose a photo showing only the person for this case.',
+            )
+            .having((error) => error.photoIndex, 'photoIndex', 2)
+            .having(
+          (error) => error.reasons,
+          'reasons',
+          ['Choose a photo showing only the person for this case.'],
         ),
       ),
     );

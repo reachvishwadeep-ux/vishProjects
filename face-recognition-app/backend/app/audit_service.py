@@ -14,7 +14,7 @@ from app.models import (
     CaseAccount,
     CaseRecord,
 )
-from app.schemas import InstallationRequest
+from app.schemas import InstallationRequest, PushRegistrationRequest
 
 
 def require_audit_admin(
@@ -165,6 +165,60 @@ def register_installation(
                 data={"active_installation_count": installation_count},
             )
 
+    db.commit()
+    db.refresh(installation)
+    return installation
+
+
+def register_push_installation(
+    db: Session,
+    request: PushRegistrationRequest,
+    *,
+    account: Account,
+) -> AppInstallation:
+    if request.enabled and not request.fid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Firebase installation ID is required when notifications are enabled",
+        )
+    installation = db.get(AppInstallation, request.installation_id)
+    if installation is None or installation.account_id != account.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="app installation is unavailable",
+        )
+
+    now = datetime.now(UTC)
+    if request.enabled and request.fid:
+        previous = db.scalar(
+            select(AppInstallation).where(
+                AppInstallation.push_fid == request.fid,
+                AppInstallation.id != installation.id,
+            )
+        )
+        if previous is not None:
+            previous.push_fid = None
+            previous.push_enabled = False
+            previous.push_fid_updated_at = now
+            db.flush()
+        installation.push_fid = request.fid
+        installation.push_enabled = True
+    else:
+        installation.push_fid = None
+        installation.push_enabled = False
+    installation.push_fid_updated_at = now
+    installation.last_seen_at = now
+
+    record_event(
+        db,
+        "push_registration_updated",
+        account_id=account.id,
+        data={
+            "installation_id": str(installation.id),
+            "enabled": installation.push_enabled,
+            "platform": installation.platform,
+        },
+    )
     db.commit()
     db.refresh(installation)
     return installation

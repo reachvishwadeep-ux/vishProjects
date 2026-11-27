@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:phone_form_field/phone_form_field.dart';
 import 'package:poc_app/auth/auth_controller.dart';
 import 'package:poc_app/auth/auth_repository.dart';
+import 'package:poc_app/screens/contact_sharing_consent_screen.dart';
 import 'package:poc_app/screens/phone_auth_screen.dart';
 
 class MemoryTokenStore implements TokenStore {
@@ -23,7 +25,11 @@ class MemoryTokenStore implements TokenStore {
   }
 }
 
-Map<String, Object?> _tokens(String refreshToken) => {
+Map<String, Object?> _tokens(
+  String refreshToken, {
+  bool contactSharingConsented = true,
+}) =>
+    {
       'access_token': 'access-token',
       'refresh_token': refreshToken,
       'token_type': 'bearer',
@@ -31,6 +37,7 @@ Map<String, Object?> _tokens(String refreshToken) => {
       'account': {
         'id': '3f51621c-566c-4e87-b657-9728bfbd0e53',
         'phone_number': '+919876543210',
+        'contact_sharing_consented': contactSharingConsented,
       },
     };
 
@@ -53,6 +60,7 @@ void main() {
       final body = jsonDecode(request.body) as Map<String, Object?>;
       expect(body['challenge_id'], 'challenge-id');
       expect(body['code'], '123456');
+      expect(body['contact_sharing_consent'], isTrue);
       return http.Response(jsonEncode(_tokens('refresh-one')), 200);
     });
     final repository = AuthRepository(
@@ -70,6 +78,7 @@ void main() {
 
     expect(challenge.developmentCode, '123456');
     expect(account.phoneNumber, '+919876543210');
+    expect(account.contactSharingConsented, isTrue);
     expect(await repository.validAccessToken(), 'access-token');
     expect(store.values.values, contains('refresh-one'));
   });
@@ -91,8 +100,47 @@ void main() {
     final account = await repository.restore();
 
     expect(account?.phoneNumber, '+919876543210');
+    expect(account?.contactSharingConsented, isTrue);
     expect(store.values.values, contains('refresh-two'));
     expect(store.values.values, isNot(contains('refresh-one')));
+  });
+
+  test('records contact-sharing consent for an existing session', () async {
+    final store = MemoryTokenStore()
+      ..values['matchsnap_refresh_token'] = 'refresh-one';
+    var consentRequested = false;
+    final client = MockClient((request) async {
+      if (request.url.path == '/v1/auth/refresh') {
+        return http.Response(
+          jsonEncode(
+            _tokens('refresh-two', contactSharingConsented: false),
+          ),
+          200,
+        );
+      }
+      expect(request.url.path, '/v1/auth/contact-sharing-consent');
+      expect(request.headers['authorization'], 'Bearer access-token');
+      consentRequested = true;
+      return http.Response(
+        jsonEncode({
+          'id': '3f51621c-566c-4e87-b657-9728bfbd0e53',
+          'phone_number': '+919876543210',
+          'contact_sharing_consented': true,
+        }),
+        200,
+      );
+    });
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: store,
+      client: client,
+    );
+    await repository.restore();
+
+    final account = await repository.acceptContactSharing();
+
+    expect(consentRequested, isTrue);
+    expect(account.contactSharingConsented, isTrue);
   });
 
   test('logout preserves the installation identifier', () async {
@@ -109,6 +157,17 @@ void main() {
     expect(store.values['matchsnap_installation_id'], 'installation-id');
   });
 
+  test('formats supported national numbers as E.164', () {
+    expect(
+      const PhoneNumber(isoCode: IsoCode.IN, nsn: '9876543210').international,
+      '+919876543210',
+    );
+    expect(
+      const PhoneNumber(isoCode: IsoCode.US, nsn: '5202250867').international,
+      '+15202250867',
+    );
+  });
+
   testWidgets('phone screen completes the development OTP flow',
       (tester) async {
     final repository = AuthRepository(
@@ -116,6 +175,7 @@ void main() {
       tokenStore: MemoryTokenStore(),
       client: MockClient((request) async {
         if (request.url.path.endsWith('/otp/request')) {
+          expect(jsonDecode(request.body)['phone_number'], '+919876543210');
           return http.Response(
             jsonEncode({
               'challenge_id': 'challenge-id',
@@ -125,16 +185,45 @@ void main() {
             202,
           );
         }
+        expect(jsonDecode(request.body)['phone_number'], '+919876543210');
         return http.Response(jsonEncode(_tokens('refresh-one')), 200);
       }),
     );
     final controller = AuthController(repository: repository);
     await controller.initialize();
     await tester.pumpWidget(
-      MaterialApp(home: PhoneAuthScreen(controller: controller)),
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
     );
 
-    await tester.enterText(find.byType(TextField).first, '+919876543210');
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).autofillHints,
+      contains(AutofillHints.telephoneNumberNational),
+    );
+    await tester.enterText(find.byType(TextField).first, '98765 43210');
+    await tester.scrollUntilVisible(
+      find.text('I agree to phone-number sharing after a match'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pump();
+    expect(
+      tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+      isTrue,
+    );
+    await tester.ensureVisible(find.text('Send verification code'));
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Send verification code'),
+          )
+          .onPressed,
+      isNotNull,
+    );
     await tester.tap(find.text('Send verification code'));
     await tester.pumpAndSettle();
 
@@ -145,5 +234,170 @@ void main() {
 
     expect(controller.authenticated, isTrue);
     expect(controller.account?.phoneNumber, '+919876543210');
+    expect(controller.contactSharingConsented, isTrue);
+  });
+
+  testWidgets('phone screen requires contact-sharing disclosure',
+      (tester) async {
+    var requestCount = 0;
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async {
+        requestCount += 1;
+        return http.Response('{}', 500);
+      }),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, '98765 43210');
+
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Send verification code'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(requestCount, 0);
+  });
+
+  testWidgets('existing user can accept contact sharing', (tester) async {
+    final store = MemoryTokenStore()
+      ..values['matchsnap_refresh_token'] = 'refresh-one';
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: store,
+      client: MockClient((request) async {
+        if (request.url.path == '/v1/auth/refresh') {
+          return http.Response(
+            jsonEncode(
+              _tokens('refresh-two', contactSharingConsented: false),
+            ),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'id': '3f51621c-566c-4e87-b657-9728bfbd0e53',
+            'phone_number': '+919876543210',
+            'contact_sharing_consented': true,
+          }),
+          200,
+        );
+      }),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ContactSharingConsentScreen(controller: controller),
+      ),
+    );
+
+    await tester.tap(find.text('Agree and continue'));
+    await tester.pumpAndSettle();
+
+    expect(controller.contactSharingConsented, isTrue);
+  });
+
+  testWidgets('phone screen rejects an invalid number before the API request',
+      (tester) async {
+    var requestCount = 0;
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async {
+        requestCount += 1;
+        return http.Response('{}', 500);
+      }),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, '123');
+    await tester.scrollUntilVisible(
+      find.text('I agree to phone-number sharing after a match'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.ensureVisible(find.text('Send verification code'));
+    await tester.tap(find.text('Send verification code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enter a valid mobile number.'), findsOneWidget);
+    expect(find.text('Local demo code: 123456'), findsNothing);
+    expect(requestCount, 0);
+  });
+
+  testWidgets('phone screen rejects international text in the national field',
+      (tester) async {
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async => http.Response('{}', 500)),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    final phoneField = find.byType(TextField).first;
+    await tester.enterText(phoneField, '(+44) 7400 123456');
+    await tester.pump();
+
+    expect(tester.widget<TextField>(phoneField).controller!.text, isEmpty);
+  });
+
+  testWidgets('phone screen rejects an incomplete plus edit', (tester) async {
+    final repository = AuthRepository(
+      baseUrl: 'https://api.example.com',
+      tokenStore: MemoryTokenStore(),
+      client: MockClient((request) async => http.Response('{}', 500)),
+    );
+    final controller = AuthController(repository: repository);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: PhoneFieldLocalization.delegates,
+        supportedLocales: const [Locale('en')],
+        home: PhoneAuthScreen(controller: controller),
+      ),
+    );
+
+    final phoneField = find.byType(TextField).first;
+    await tester.enterText(phoneField, '9876543210');
+    await tester.pump();
+    final validText = tester.widget<TextField>(phoneField).controller!.text;
+
+    await tester.enterText(phoneField, '+');
+    await tester.pump();
+
+    expect(
+      tester.widget<TextField>(phoneField).controller!.text,
+      validText,
+    );
   });
 }

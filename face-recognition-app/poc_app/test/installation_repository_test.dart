@@ -71,4 +71,35 @@ void main() {
     expect(requests.single.url.path, '/v1/audit/installations/bind');
     expect(requests.single.headers['Authorization'], 'Bearer access-token');
   });
+
+  test('registers a Firebase installation ID without exposing it elsewhere',
+      () async {
+    final requests = <http.Request>[];
+    final repository = InstallationRepository(
+      baseUrl: 'https://api.example.com',
+      appVersion: '1.0.0',
+      buildNumber: '1',
+      platform: 'ios',
+      store: MemoryInstallationStore(),
+      tokenProvider: () async => 'access-token',
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await repository.registerPush(
+      fid: 'firebase-installation-id',
+      enabled: true,
+    );
+
+    final request = requests.single;
+    final payload = jsonDecode(request.body) as Map<String, Object?>;
+    expect(request.url.path, '/v1/audit/installations/push');
+    expect(request.headers['Authorization'], 'Bearer access-token');
+    expect(payload['fid'], 'firebase-installation-id');
+    expect(payload['enabled'], isTrue);
+    expect(payload['installation_id'], isNotEmpty);
+    expect(payload, isNot(contains('token')));
+  });
 }
