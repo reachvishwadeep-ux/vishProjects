@@ -203,11 +203,10 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'This app supports the search for missing people by face '
-                  'recognition of uploaded photos of missing and found '
-                  'individuals. Whenever it identifies a possible match, it '
-                  'displays a confidence score and connects the people who '
-                  'submitted the photos.',
+                  'This app supports the search for missing people by '
+                  'comparing uploaded photos of missing and found individuals. '
+                  'It highlights any potential matches with a confidence score '
+                  'and helps connect the people who submitted the photos.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .82),
                     height: 1.3,

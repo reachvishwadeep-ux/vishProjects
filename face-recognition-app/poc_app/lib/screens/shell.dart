@@ -5,7 +5,6 @@ import '../auth/auth_controller.dart';
 import '../connections/connection_repository.dart';
 import '../notifications/push_notification_controller.dart';
 import '../repository/case_repository.dart';
-import 'gallery_screen.dart';
 import 'match_screen.dart';
 import 'my_cases_screen.dart';
 import 'my_matches_screen.dart';
@@ -88,7 +87,6 @@ class _AppShellState extends State<AppShell> {
                 active: _index == 1,
               ),
               MyMatchesScreen(repository: widget.connections),
-              GalleryScreen(state: widget.state),
               ProfileScreen(auth: widget.auth),
             ],
           ),
@@ -128,11 +126,6 @@ class _AppShellState extends State<AppShell> {
                     icon: Icon(Icons.favorite_border_rounded),
                     selectedIcon: Icon(Icons.favorite_rounded),
                     label: 'Matches',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.folder_copy_outlined),
-                    selectedIcon: Icon(Icons.folder_copy_rounded),
-                    label: 'Saved Info',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person_outline_rounded),

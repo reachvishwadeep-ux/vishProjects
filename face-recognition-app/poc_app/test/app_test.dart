@@ -55,10 +55,11 @@ void main() {
     expect(heroHeading.style?.fontWeight, FontWeight.w700);
     expect(
       find.textContaining(
-        'This app supports the search for missing people by face recognition',
+        'This app supports the search for missing people by comparing',
       ),
       findsOneWidget,
     );
+    expect(find.textContaining('helps connect the people'), findsOneWidget);
     expect(find.text('Fast scan'), findsNothing);
     expect(find.text('Shared search'), findsNothing);
     expect(find.text('I’m looking for someone'), findsOneWidget);
@@ -96,27 +97,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No uploaded cases yet'), findsOneWidget);
-
-    await tester.tap(find.text('Saved Info'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No saved images yet'), findsOneWidget);
-  });
-
-  testWidgets('stored images appear in the repository tab', (tester) async {
-    // Adding hashes in a real isolate, so it has to run outside the fake clock.
-    await tester.runAsync(
-      () => state.addImage(bytes: _jpeg(), label: 'Amber Ridge'),
-    );
-
-    await tester.pumpWidget(PocApp(state: state));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Saved Info'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Amber Ridge'), findsOneWidget);
-    expect(find.textContaining('1 saved image'), findsOneWidget);
+    expect(find.text('Saved Info'), findsNothing);
   });
 
   testWidgets('the result screen reports a match with its candidates',
