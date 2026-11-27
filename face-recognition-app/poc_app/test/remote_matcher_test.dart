@@ -205,11 +205,18 @@ void main() {
         caseType: CaseType.found,
       ),
       throwsA(
-        isA<RemoteRecognitionException>().having(
-          (error) => error.message,
-          'message',
-          'Photo 2 contains more than one person. '
-              'Choose a photo showing only the person for this case.',
+        isA<RemoteRecognitionException>()
+            .having(
+              (error) => error.message,
+              'message',
+              'Photo 2 contains more than one person. '
+                  'Choose a photo showing only the person for this case.',
+            )
+            .having((error) => error.photoIndex, 'photoIndex', 2)
+            .having(
+          (error) => error.reasons,
+          'reasons',
+          ['Choose a photo showing only the person for this case.'],
         ),
       ),
     );
